@@ -66,6 +66,18 @@ describe('filterStocks', () => {
       maxPe: 100, maxPs: 100, insiderOnly: false,
     })).toHaveLength(2)
   })
+
+  it('matches only complete ticker symbols, ignoring case and surrounding spaces', () => {
+    const filters = {
+      search: '  grow  ', sector: 'All sectors', marketCap: 'all' as const,
+      minRevenueGrowth: 0, minEarningsGrowth: 0, minFcfGrowth: 0,
+      minGrossMargin: 0, maxPe: 100, maxPs: 100, insiderOnly: false,
+    }
+
+    expect(filterStocks([strongStock, valueStock], filters).map((stock) => stock.ticker)).toEqual(['GROW'])
+    expect(filterStocks([strongStock, valueStock], { ...filters, search: 'GRO' })).toEqual([])
+    expect(filterStocks([strongStock, valueStock], { ...filters, search: 'Growth Co' })).toEqual([])
+  })
 })
 
 describe('getRecommendations', () => {
