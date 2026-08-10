@@ -31,6 +31,7 @@ type ProviderRecord = Record<string, unknown>
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
 interface ProviderPriceBar {
+  date?: string | null
   close?: number | string | null
 }
 
@@ -44,6 +45,26 @@ export interface StockQuote {
   price: number
   change: number
   sparkline: number[]
+  history: PricePoint[]
+}
+
+export type QuoteRange = '1d' | '1m' | '6m' | '1y' | '5y'
+
+export interface PricePoint {
+  date: string
+  price: number
+}
+
+interface QuoteOptions {
+  range?: QuoteRange
+}
+
+const quoteRangeConfig: Record<QuoteRange, { mode: 'daily' | 'minute-bars'; period: string; limit: number }> = {
+  '1d': { mode: 'minute-bars', period: '1d', limit: 500 },
+  '1m': { mode: 'daily', period: '1mo', limit: 40 },
+  '6m': { mode: 'daily', period: '6mo', limit: 160 },
+  '1y': { mode: 'daily', period: '1y', limit: 260 },
+  '5y': { mode: 'daily', period: '5y', limit: 1500 },
 }
 
 const findMetric = (metadata: ProviderMetric[], patterns: RegExp[]) => {
@@ -120,17 +141,24 @@ const samplePrices = (values: number[], sampleSize = 10) => {
   )
 }
 
-export async function fetchStockQuotes(apiKey: string, tickers: string[], fetcher: Fetcher = fetch) {
+export async function fetchStockQuotes(
+  apiKey: string,
+  tickers: string[],
+  fetcher: Fetcher = fetch,
+  options: QuoteOptions = {},
+) {
   if (!apiKey.trim()) throw new Error('BUSINESS_QUANT_API_KEY is not configured')
   const uniqueTickers = Array.from(new Set(tickers.map((ticker) => ticker.trim().toUpperCase()).filter(Boolean)))
   if (!uniqueTickers.length) return []
   if (uniqueTickers.length > 50) throw new Error('A maximum of 50 quote tickers can be requested at once')
 
+  const range = options.range ?? '1y'
+  const config = quoteRangeConfig[range]
   const url = new URL('/quotes', BASE_URL)
   url.searchParams.set('ticker', uniqueTickers.join(','))
-  url.searchParams.set('mode', 'daily')
-  url.searchParams.set('period', '1y')
-  url.searchParams.set('limit', '260')
+  url.searchParams.set('mode', config.mode)
+  url.searchParams.set('period', config.period)
+  url.searchParams.set('limit', String(config.limit))
   url.searchParams.set('api_key', apiKey)
   const payload = await readJson<Record<string, ProviderQuoteSeries> | ProviderQuoteSeries>(await fetcher(url))
   const candidateSingle = payload as ProviderQuoteSeries
@@ -140,18 +168,20 @@ export async function fetchStockQuotes(apiKey: string, tickers: string[], fetche
     const series = singleTickerPayload && uniqueTickers.length === 1
       ? singleTickerPayload
       : (payload as Record<string, ProviderQuoteSeries>)[ticker]
-    const newestFirst = (series?.data ?? [])
-      .map((bar) => numeric(bar.close))
-      .filter((value): value is number => value !== null)
+    const newestFirst = (series?.data ?? []).flatMap((bar): PricePoint[] => {
+      const price = numeric(bar.close)
+      return price === null ? [] : [{ date: String(bar.date ?? ''), price }]
+    })
     if (!newestFirst.length) return []
-    const latest = newestFirst[0]
-    const previous = newestFirst[1] ?? latest
-    const chronological = [...newestFirst].reverse()
+    const latest = newestFirst[0].price
+    const previous = newestFirst[1]?.price ?? latest
+    const history = [...newestFirst].reverse()
     return [{
       ticker,
       price: latest,
       change: previous ? ((latest - previous) / previous) * 100 : 0,
-      sparkline: samplePrices(chronological),
+      sparkline: samplePrices(history.map((point) => point.price)),
+      history,
     }]
   })
 }

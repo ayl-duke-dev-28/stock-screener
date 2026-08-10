@@ -2,7 +2,7 @@ import { createServer, type ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, resolve } from 'node:path'
 import { loadEnvFile } from 'node:process'
-import { fetchStockQuotes, fetchUsMarket, type StockQuote } from './businessQuant'
+import { fetchStockQuotes, fetchUsMarket, type QuoteRange, type StockQuote } from './businessQuant'
 
 try { loadEnvFile() } catch { /* Production hosts inject environment variables directly. */ }
 
@@ -11,6 +11,7 @@ const cacheTtlMs = 15 * 60 * 1000
 const distRoot = resolve(process.cwd(), 'dist')
 let marketCache: { expiresAt: number; payload: Awaited<ReturnType<typeof fetchUsMarket>> } | null = null
 const quoteCache = new Map<string, { expiresAt: number; quote: StockQuote }>()
+const quoteRanges = new Set<QuoteRange>(['1d', '1m', '6m', '1y', '5y'])
 
 const json = (response: ServerResponse, status: number, payload: unknown) => {
   response.writeHead(status, {
@@ -49,7 +50,7 @@ async function serveMarket(response: ServerResponse) {
   }
 }
 
-async function serveQuotes(tickerQuery: string | null, response: ServerResponse) {
+async function serveQuotes(tickerQuery: string | null, rangeQuery: string | null, response: ServerResponse) {
   const apiKey = process.env.BUSINESS_QUANT_API_KEY?.trim()
   if (!apiKey) {
     json(response, 503, { error: 'Market quotes are not configured.', configurationRequired: true })
@@ -62,15 +63,22 @@ async function serveQuotes(tickerQuery: string | null, response: ServerResponse)
     return
   }
 
+  const range = (rangeQuery ?? '1y') as QuoteRange
+  if (!quoteRanges.has(range)) {
+    json(response, 400, { error: 'Range must be one of 1d, 1m, 6m, 1y, or 5y.' })
+    return
+  }
+
   const now = Date.now()
-  const missing = tickers.filter((ticker) => !quoteCache.has(ticker) || quoteCache.get(ticker)!.expiresAt <= now)
+  const cacheKey = (ticker: string) => `${range}:${ticker}`
+  const missing = tickers.filter((ticker) => !quoteCache.has(cacheKey(ticker)) || quoteCache.get(cacheKey(ticker))!.expiresAt <= now)
   try {
     if (missing.length) {
-      const freshQuotes = await fetchStockQuotes(apiKey, missing)
-      freshQuotes.forEach((quote) => quoteCache.set(quote.ticker, { quote, expiresAt: now + cacheTtlMs }))
+      const freshQuotes = await fetchStockQuotes(apiKey, missing, fetch, { range })
+      freshQuotes.forEach((quote) => quoteCache.set(cacheKey(quote.ticker), { quote, expiresAt: now + cacheTtlMs }))
     }
-    const quotes = tickers.flatMap((ticker) => quoteCache.get(ticker)?.quote ?? [])
-    json(response, 200, { quotes, source: 'Business Quant' })
+    const quotes = tickers.flatMap((ticker) => quoteCache.get(cacheKey(ticker))?.quote ?? [])
+    json(response, 200, { quotes, source: 'Business Quant', range })
   } catch (error) {
     console.error(JSON.stringify({
       level: 'error',
@@ -118,7 +126,7 @@ createServer(async (request, response) => {
     return
   }
   if (request.method === 'GET' && url.pathname === '/api/quotes') {
-    await serveQuotes(url.searchParams.get('tickers'), response)
+    await serveQuotes(url.searchParams.get('tickers'), url.searchParams.get('range'), response)
     return
   }
   if (request.method !== 'GET') {

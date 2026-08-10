@@ -133,7 +133,7 @@ describe('screener criteria controls', () => {
 
     expect(['1D', '1M', '6M', '1Y', '5Y'].map((range) => screen.getByRole('button', { name: range }))).toHaveLength(5)
     fireEvent.click(screen.getByRole('button', { name: '1M' }))
-    await waitFor(() => expect(fetcher).toHaveBeenCalledWith(expect.stringContaining('range=1m')))
+    await waitFor(() => expect(fetcher).toHaveBeenCalledWith(expect.stringContaining('range=1m'), expect.objectContaining({ signal: expect.any(AbortSignal) })))
     expect(screen.getByRole('button', { name: '1M' })).toHaveClass('active')
 
     const chart = await screen.findByRole('img', { name: 'Interactive price chart' })
