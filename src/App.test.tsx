@@ -8,6 +8,7 @@ describe('screener criteria controls', () => {
 
     const sliders = screen.getAllByRole('slider')
     expect(sliders).toHaveLength(6)
+    sliders.forEach((slider) => expect(slider).toHaveAttribute('step', '1'))
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
 
     const revenueSlider = screen.getByRole('slider', { name: 'Min. revenue growth' })
