@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach as afterEachVitest, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { stocks } from './data/stocks'
@@ -138,9 +138,17 @@ describe('screener criteria controls', () => {
 
     const chart = await screen.findByRole('img', { name: 'Interactive price chart' })
     vi.spyOn(chart, 'getBoundingClientRect').mockReturnValue({
-      x: 0, y: 0, top: 0, right: 640, bottom: 190, left: 0, width: 640, height: 190, toJSON: () => ({}),
+      x: 0, y: 0, top: 0, right: 600, bottom: 190, left: 0, width: 600, height: 190, toJSON: () => ({}),
     })
-    fireEvent.mouseMove(chart, { clientX: 320 })
-    expect(screen.getByText('$100.00')).toBeInTheDocument()
+    Object.defineProperty(chart, 'getScreenCTM', { value: () => ({
+      inverse: () => ({ a: 1.6, b: 0, c: 0, d: 1, e: -160, f: 0 }),
+    }) })
+    fireEvent.mouseMove(chart, { clientX: 150, clientY: 80 })
+
+    expect(within(container.querySelector('.chart-hover')!).getByText('$90.00')).toBeInTheDocument()
+    const priceAxis = container.querySelector('.price-axis')!
+    expect(within(priceAxis).getAllByText(/^\$/)).toHaveLength(5)
+    expect(within(priceAxis).getByText('$110.00')).toBeInTheDocument()
+    expect(within(priceAxis).getByText('$90.00')).toBeInTheDocument()
   })
 })
