@@ -30,6 +30,22 @@ export interface ResolvedMetric {
 type ProviderRecord = Record<string, unknown>
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
+interface ProviderPriceBar {
+  close?: number | string | null
+}
+
+interface ProviderQuoteSeries {
+  metadata?: { ticker?: string }
+  data?: ProviderPriceBar[]
+}
+
+export interface StockQuote {
+  ticker: string
+  price: number
+  change: number
+  sparkline: number[]
+}
+
 const findMetric = (metadata: ProviderMetric[], patterns: RegExp[]) =>
   metadata
     .filter((metric) => patterns.some((pattern) => pattern.test(metric.metric_full) || pattern.test(metric.metric_short ?? '')))
@@ -91,6 +107,49 @@ async function readJson<T>(response: Response): Promise<T> {
     throw new Error(`Business Quant request failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`)
   }
   return response.json() as Promise<T>
+}
+
+const samplePrices = (values: number[], sampleSize = 10) => {
+  if (values.length <= sampleSize) return values
+  return Array.from({ length: sampleSize }, (_, index) =>
+    values[Math.round((index / (sampleSize - 1)) * (values.length - 1))],
+  )
+}
+
+export async function fetchStockQuotes(apiKey: string, tickers: string[], fetcher: Fetcher = fetch) {
+  if (!apiKey.trim()) throw new Error('BUSINESS_QUANT_API_KEY is not configured')
+  const uniqueTickers = Array.from(new Set(tickers.map((ticker) => ticker.trim().toUpperCase()).filter(Boolean)))
+  if (!uniqueTickers.length) return []
+  if (uniqueTickers.length > 50) throw new Error('A maximum of 50 quote tickers can be requested at once')
+
+  const url = new URL('/quotes', BASE_URL)
+  url.searchParams.set('ticker', uniqueTickers.join(','))
+  url.searchParams.set('mode', 'daily')
+  url.searchParams.set('period', '1y')
+  url.searchParams.set('limit', '260')
+  url.searchParams.set('api_key', apiKey)
+  const payload = await readJson<Record<string, ProviderQuoteSeries> | ProviderQuoteSeries>(await fetcher(url))
+  const candidateSingle = payload as ProviderQuoteSeries
+  const singleTickerPayload = Array.isArray(candidateSingle.data) ? candidateSingle : undefined
+
+  return uniqueTickers.flatMap((ticker): StockQuote[] => {
+    const series = singleTickerPayload && uniqueTickers.length === 1
+      ? singleTickerPayload
+      : (payload as Record<string, ProviderQuoteSeries>)[ticker]
+    const newestFirst = (series?.data ?? [])
+      .map((bar) => numeric(bar.close, Number.NaN))
+      .filter(Number.isFinite)
+    if (!newestFirst.length) return []
+    const latest = newestFirst[0]
+    const previous = newestFirst[1] ?? latest
+    const chronological = [...newestFirst].reverse()
+    return [{
+      ticker,
+      price: latest,
+      change: previous ? ((latest - previous) / previous) * 100 : 0,
+      sparkline: samplePrices(chronological),
+    }]
+  })
 }
 
 export async function fetchUsMarket(apiKey: string, fetcher: Fetcher = fetch, pageSize = 1000) {

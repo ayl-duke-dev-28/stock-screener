@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fetchUsMarket, mapProviderStock, resolveMetrics } from './businessQuant'
+import { fetchStockQuotes, fetchUsMarket, mapProviderStock, resolveMetrics } from './businessQuant'
 
 const metadata = [
   { metric_full: 'Market Capitalization', metric_short: 'Market Cap', datatype: 'number' },
@@ -66,5 +66,40 @@ describe('Business Quant market adapter', () => {
   it('surfaces a safe provider error for unsuccessful responses', async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response('unauthorized', { status: 401 }))
     await expect(fetchUsMarket('invalid', fetcher)).rejects.toThrow('Business Quant request failed (401)')
+  })
+
+  it('maps current prices, daily changes, and sampled one-year trends', async () => {
+    const closes = Array.from({ length: 20 }, (_, index) => 100 + index).reverse()
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      AAPL: { data: closes.map((close) => ({ close })) },
+      EMPTY: { data: [] },
+    })))
+
+    const quotes = await fetchStockQuotes('secret-key', ['aapl', 'AAPL', 'empty'], fetcher)
+
+    expect(quotes).toHaveLength(1)
+    expect(quotes[0]).toEqual(expect.objectContaining({ ticker: 'AAPL', price: 119 }))
+    expect(quotes[0].change).toBeCloseTo(((119 - 118) / 118) * 100)
+    expect(quotes[0].sparkline).toHaveLength(10)
+    expect(quotes[0].sparkline[0]).toBe(100)
+    expect(quotes[0].sparkline.at(-1)).toBe(119)
+    expect(String(fetcher.mock.calls[0][0])).toContain('ticker=AAPL%2CEMPTY')
+    expect(String(fetcher.mock.calls[0][0])).toContain('period=1y')
+  })
+
+  it('caps quote batches to protect the provider and API allowance', async () => {
+    const tickers = Array.from({ length: 51 }, (_, index) => `T${index}`)
+    await expect(fetchStockQuotes('secret-key', tickers, vi.fn())).rejects.toThrow('maximum of 50')
+  })
+
+  it('accepts the provider single-ticker response without a ticker wrapper', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      metadata: { ticker: 'AAPL' },
+      data: [{ close: 205 }, { close: 200 }],
+    })))
+
+    await expect(fetchStockQuotes('secret-key', ['AAPL'], fetcher)).resolves.toEqual([
+      expect.objectContaining({ ticker: 'AAPL', price: 205, sparkline: [200, 205] }),
+    ])
   })
 })

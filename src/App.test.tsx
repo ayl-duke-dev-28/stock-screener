@@ -31,16 +31,28 @@ describe('screener criteria controls', () => {
       ...stocks[index % stocks.length],
       ticker: `T${String(index + 1).padStart(3, '0')}`,
       name: `Company ${index + 1}`,
+      ...(index % 10 === 0 ? { revenueGrowth: -999, earningsGrowth: -999, fcfGrowth: -999, pe: 999, ps: 999 } : {}),
     }))
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      stocks: fullMarket, total: 121, source: 'Business Quant', updatedAt: new Date().toISOString(),
-    }))))
+    const fetcher = vi.fn().mockImplementation((input: string) => {
+      if (String(input).startsWith('/api/quotes')) {
+        const tickers = decodeURIComponent(String(input)).split('tickers=')[1].split(',')
+        return Promise.resolve(new Response(JSON.stringify({
+          quotes: tickers.map((ticker) => ({ ticker, price: 123.45, change: 1.25, sparkline: [100, 103, 108, 112, 123.45] })),
+        })))
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        stocks: fullMarket, total: 121, source: 'Business Quant', updatedAt: new Date().toISOString(),
+      })))
+    })
+    vi.stubGlobal('fetch', fetcher)
 
     const { container } = render(<App />)
 
     await waitFor(() => expect(screen.getByText('121', { selector: '.result-count strong' })).toBeInTheDocument())
     expect(container.querySelectorAll('.table-row')).toHaveLength(50)
     expect(screen.getByText('Business Quant')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByText('$123.45')).toHaveLength(50))
+    expect(fetcher).toHaveBeenCalledWith(expect.stringContaining('/api/quotes?tickers='))
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
     expect(screen.getByText('Page 2 of 3')).toBeInTheDocument()
