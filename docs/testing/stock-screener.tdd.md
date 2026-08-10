@@ -56,3 +56,14 @@ The current dataset is local sample data. Live prices, filings, and insider tran
 - Coverage after change: 91.48% statements, 88.46% branches, 100% functions, and 97.05% lines for the scoring/filtering engine.
 - Build: `npm run build` completed successfully.
 - Checkpoints: `7c678d1` preserves RED evidence; `abac4fb` preserves the GREEN implementation.
+
+## Slider precision and readability update
+
+- Journey: As an analyst, I can adjust every numeric criterion one unit at a time and read the supporting interface text comfortably.
+- RED command: `npm test -- src/App.test.tsx`
+- RED evidence: the test received `step="5"` for growth sliders while requiring `step="1"` for all six controls.
+- GREEN command: `npm test -- src/App.test.tsx`
+- GREEN evidence: all six slider controls expose `step="1"`, and the existing live-filter interaction remains green.
+- Readability: filter labels, table data, helper text, score explanations, stock details, and idea cards received larger type sizes; primary supporting copy is now 16px.
+- Full regression: `npm test` passed 7/7 tests; coverage remained at 91.48% statements and 97.05% lines; `npm run build` completed successfully.
+- Checkpoints: `dd10bcb` preserves RED evidence; `a7d1dcb` preserves the GREEN implementation.
