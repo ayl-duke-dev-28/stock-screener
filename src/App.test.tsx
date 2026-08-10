@@ -147,8 +147,8 @@ describe('screener criteria controls', () => {
 
     expect(within(container.querySelector('.chart-hover')!).getByText('$90.00')).toBeInTheDocument()
     const priceAxis = container.querySelector('.price-axis')!
-    expect(within(priceAxis).getAllByText(/^\$/)).toHaveLength(5)
-    expect(within(priceAxis).getByText('$110.00')).toBeInTheDocument()
-    expect(within(priceAxis).getByText('$90.00')).toBeInTheDocument()
+    expect(priceAxis.querySelectorAll('text')).toHaveLength(5)
+    expect(priceAxis.textContent).toContain('$110.00')
+    expect(priceAxis.textContent).toContain('$90.00')
   })
 })

@@ -83,18 +83,31 @@ function Sparkline({ values, dates = [], range = '1y', positive = true, large = 
   if (values.length < 2) return <span className={large ? 'hero-chart' : 'sparkline'} role="img" aria-label="Price trend unavailable">—</span>
   const width = large ? 640 : 92
   const height = large ? 190 : 34
-  const min = Math.min(...values)
-  const max = Math.max(...values)
+  const rawMin = Math.min(...values)
+  const rawMax = Math.max(...values)
+  const constantPadding = rawMax === rawMin ? Math.max(Math.abs(rawMax) * 0.01, 0.01) : 0
+  const min = rawMin - constantPadding
+  const max = rawMax + constantPadding
   const valueRange = max - min || 1
+  const plotLeft = large ? 8 : 0
+  const plotRight = large ? width - 64 : width
+  const plotTop = large ? 8 : 4
+  const plotBottom = large ? height - 12 : height - 4
+  const plotWidth = plotRight - plotLeft
+  const plotHeight = plotBottom - plotTop
   const coordinates = values.map((value, index) => ({
-    x: (index / (values.length - 1)) * width,
-    y: height - ((value - min) / valueRange) * (height - 8) - 4,
+    x: plotLeft + (index / (values.length - 1)) * plotWidth,
+    y: plotBottom - ((value - min) / valueRange) * plotHeight,
   }))
+  const axisTicks = large ? Array.from({ length: 5 }, (_, index) => ({
+    value: max - (index / 4) * valueRange,
+    y: plotTop + (index / 4) * plotHeight,
+  })) : []
   const points = coordinates.map(({ x, y }) => `${x},${y}`).join(' ')
   const hovered = hoveredIndex === null ? null : coordinates[hoveredIndex]
   const hoveredValue = hoveredIndex === null ? null : values[hoveredIndex]
   const hoveredDate = hoveredIndex === null ? '' : formatChartDate(dates[hoveredIndex] ?? '', range)
-  const tooltipX = hovered ? Math.min(width - 70, Math.max(70, hovered.x)) : 0
+  const tooltipX = hovered ? Math.min(plotRight - 70, Math.max(plotLeft + 70, hovered.x)) : 0
   return (
     <svg
       className={large ? 'hero-chart interactive-chart' : 'sparkline'}
@@ -102,16 +115,24 @@ function Sparkline({ values, dates = [], range = '1y', positive = true, large = 
       role="img"
       aria-label={large ? 'Interactive price chart' : 'Price trend'}
       onMouseMove={large ? (event) => {
-        const bounds = event.currentTarget.getBoundingClientRect()
-        const relativeX = Math.min(1, Math.max(0, (event.clientX - bounds.left) / (bounds.width || width)))
+        let chartX: number
+        const transform = event.currentTarget.getScreenCTM()
+        if (transform) {
+          const inverse = transform.inverse()
+          chartX = inverse.a * event.clientX + inverse.c * event.clientY + inverse.e
+        } else {
+          const bounds = event.currentTarget.getBoundingClientRect()
+          chartX = ((event.clientX - bounds.left) / (bounds.width || width)) * width
+        }
+        const relativeX = Math.min(1, Math.max(0, (chartX - plotLeft) / plotWidth))
         setHoveredIndex(Math.round(relativeX * (values.length - 1)))
       } : undefined}
       onMouseLeave={large ? () => setHoveredIndex(null) : undefined}
     >
-      {large && <><defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#16856b" stopOpacity=".22"/><stop offset="1" stopColor="#16856b" stopOpacity="0"/></linearGradient></defs><polygon points={`0,${height} ${points} ${width},${height}`} fill="url(#chartFill)" /></>}
+      {large && <><defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#16856b" stopOpacity=".22"/><stop offset="1" stopColor="#16856b" stopOpacity="0"/></linearGradient></defs><g className="price-axis">{axisTicks.map((tick) => <g key={tick.y}><line x1={plotLeft} x2={plotRight} y1={tick.y} y2={tick.y}/><text x={plotRight + 8} y={tick.y + 3}>{formatPrice(tick.value)}</text></g>)}</g><polygon points={`${plotLeft},${plotBottom} ${points} ${plotRight},${plotBottom}`} fill="url(#chartFill)" /></>}
       <polyline points={points} fill="none" stroke={positive ? '#16856b' : '#b45f55'} strokeWidth={large ? 3 : 2} strokeLinecap="round" strokeLinejoin="round" />
       {large && hovered && hoveredValue !== null && <g className="chart-hover">
-        <line x1={hovered.x} x2={hovered.x} y1="4" y2={height - 4}/>
+        <line x1={hovered.x} x2={hovered.x} y1={plotTop} y2={plotBottom}/>
         <circle cx={hovered.x} cy={hovered.y} r="5"/>
         <g transform={`translate(${tooltipX - 62} 8)`}>
           <rect width="124" height={hoveredDate ? 42 : 27} rx="7"/>
