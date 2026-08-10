@@ -67,3 +67,17 @@ The current dataset is local sample data. Live prices, filings, and insider tran
 - Readability: filter labels, table data, helper text, score explanations, stock details, and idea cards received larger type sizes; primary supporting copy is now 16px.
 - Full regression: `npm test` passed 7/7 tests; coverage remained at 91.48% statements and 97.05% lines; `npm run build` completed successfully.
 - Checkpoints: `dd10bcb` preserves RED evidence; `a7d1dcb` preserves the GREEN implementation.
+
+## Full U.S. market integration
+
+- Journey: As an analyst, I can screen a full U.S.-listed equity universe without rendering thousands of table rows at once, while retaining a usable fallback when live data is not configured.
+- Provider: Business Quant full-market screener, selected from its official API documentation because it supports U.S.-listed equities and server-side access to growth, margin, valuation, and ownership metrics through one free API key.
+- RED commands: `npm test -- server/businessQuant.test.ts src/lib/pagination.test.ts` and `npm test -- src/App.test.tsx`.
+- RED evidence: the first run could not resolve the missing provider and pagination modules; the UI test subsequently remained at 12 sample companies instead of loading the mocked 121-company universe.
+- GREEN evidence: provider metadata resolution, numeric mapping, multi-page aggregation, missing-credential handling, provider-error handling, pagination boundaries, full-market UI loading, and 50-row rendering all pass.
+- Full regression: `npm test` passed 15/15 tests across 4 files.
+- Coverage: 95% statements, 83.33% branches, 96.77% functions, and 98.73% lines across the scoring, pagination, and market-provider modules.
+- Build: `npm run build` completed successfully.
+- Runtime check: the web server returned HTTP 200; the unconfigured API returned a controlled HTTP 503 JSON response without exposing credentials.
+- Known gap: a real provider response cannot be verified until `BUSINESS_QUANT_API_KEY` is configured. Price sparklines remain illustrative pending a historical-prices integration.
+- Checkpoints: `8a0965a` preserves provider/pagination RED evidence; `2bc9fbb` preserves that GREEN implementation; `323ac64` preserves UI RED evidence; `b04682e` preserves the full integration.
