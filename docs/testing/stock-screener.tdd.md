@@ -44,3 +44,15 @@ User journeys were derived from the product request during this TDD run. No exte
 ## Known gap
 
 The current dataset is local sample data. Live prices, filings, and insider transactions require a licensed upstream data provider and server-side API credentials.
+
+## Criteria slider update
+
+- Journey: As an analyst, I can drag each numeric investment criterion and see its current threshold and matching results update immediately.
+- RED command: `npm test -- src/App.test.tsx`
+- RED evidence: the interaction test failed because no accessible controls with the `slider` role existed.
+- GREEN command: `npm test -- src/App.test.tsx`
+- GREEN evidence: the slider interaction test passed, including the live result-count update from 12 to 2 companies at 30% minimum revenue growth.
+- Full regression: `npm test` passed 7/7 tests across 2 test files.
+- Coverage after change: 91.48% statements, 88.46% branches, 100% functions, and 97.05% lines for the scoring/filtering engine.
+- Build: `npm run build` completed successfully.
+- Checkpoints: `7c678d1` preserves RED evidence; `abac4fb` preserves the GREEN implementation.
