@@ -9,7 +9,7 @@ const metadata = [
   { metric_full: 'Gross Margin (TTM)', metric_short: 'Gross Margin (TTM)', datatype: '%' },
   { metric_full: 'Price to Earnings', metric_short: 'P/E', datatype: 'number' },
   { metric_full: 'Price to Sales', metric_short: 'P/S', datatype: 'number' },
-  { metric_full: 'Stock Price', metric_short: 'Price', datatype: 'number' },
+  { metric_full: 'Price', metric_short: 'Price', datatype: 'number' },
 ]
 
 describe('Business Quant market adapter', () => {
@@ -22,7 +22,7 @@ describe('Business Quant market adapter', () => {
       grossMargin: { requestKey: 'Gross Margin (TTM)', responseKey: 'Gross Margin (TTM)' },
       pe: { requestKey: 'Price to Earnings', responseKey: 'P/E' },
       ps: { requestKey: 'Price to Sales', responseKey: 'P/S' },
-      price: { requestKey: 'Stock Price', responseKey: 'Price' },
+      price: { requestKey: 'Price', responseKey: 'Price' },
     }))
   })
 
