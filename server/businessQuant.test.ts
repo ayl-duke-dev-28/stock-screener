@@ -3,21 +3,26 @@ import { fetchUsMarket, mapProviderStock, resolveMetrics } from './businessQuant
 
 const metadata = [
   { metric_full: 'Market Capitalization', metric_short: 'Market Cap', datatype: 'number' },
-  { metric_full: 'Revenue Growth (YoY)', metric_short: 'Rev Growth (YoY)', datatype: '%' },
-  { metric_full: 'Net Income Growth (YoY)', metric_short: 'Net Income Growth', datatype: '%' },
-  { metric_full: 'Free Cash Flow Growth (YoY)', metric_short: 'FCF Growth', datatype: '%' },
-  { metric_full: 'Gross Profit Margin (Yr)', metric_short: 'Gross Margin', datatype: '%' },
-  { metric_full: 'P/E Ratio', metric_short: 'P/E', datatype: 'number' },
-  { metric_full: 'P/S Ratio', metric_short: 'P/S', datatype: 'number' },
+  { metric_full: 'Revenue Growth (1y) (TTM)', metric_short: 'Revenue Growth (1y) (TTM)', datatype: '%' },
+  { metric_full: 'Net Income Growth (1y) (TTM)', metric_short: 'Net Income Growth (1y) (TTM)', datatype: '%' },
+  { metric_full: 'Free Cash Flow Growth (1y) (TTM)', metric_short: 'FCF Growth (1y) (TTM)', datatype: '%' },
+  { metric_full: 'Gross Margin (TTM)', metric_short: 'Gross Margin (TTM)', datatype: '%' },
+  { metric_full: 'Price to Earnings', metric_short: 'P/E', datatype: 'number' },
+  { metric_full: 'Price to Sales', metric_short: 'P/S', datatype: 'number' },
   { metric_full: 'Stock Price', metric_short: 'Price', datatype: 'number' },
 ]
 
 describe('Business Quant market adapter', () => {
   it('resolves provider metric names from metadata instead of hard-coding the schema', () => {
     expect(resolveMetrics(metadata)).toEqual(expect.objectContaining({
-      marketCap: 'Market Capitalization', revenueGrowth: 'Revenue Growth (YoY)',
-      earningsGrowth: 'Net Income Growth (YoY)', fcfGrowth: 'Free Cash Flow Growth (YoY)',
-      grossMargin: 'Gross Profit Margin (Yr)', pe: 'P/E Ratio', ps: 'P/S Ratio', price: 'Stock Price',
+      marketCap: { requestKey: 'Market Capitalization', responseKey: 'Market Cap' },
+      revenueGrowth: { requestKey: 'Revenue Growth (1y) (TTM)', responseKey: 'Revenue Growth (1y) (TTM)' },
+      earningsGrowth: { requestKey: 'Net Income Growth (1y) (TTM)', responseKey: 'Net Income Growth (1y) (TTM)' },
+      fcfGrowth: { requestKey: 'Free Cash Flow Growth (1y) (TTM)', responseKey: 'FCF Growth (1y) (TTM)' },
+      grossMargin: { requestKey: 'Gross Margin (TTM)', responseKey: 'Gross Margin (TTM)' },
+      pe: { requestKey: 'Price to Earnings', responseKey: 'P/E' },
+      ps: { requestKey: 'Price to Sales', responseKey: 'P/S' },
+      price: { requestKey: 'Stock Price', responseKey: 'Price' },
     }))
   })
 
@@ -25,10 +30,10 @@ describe('Business Quant market adapter', () => {
     const metrics = resolveMetrics(metadata)
     const stock = mapProviderStock({
       ticker: 'TEST', name: 'Test Company', sector: 'Technology',
-      'Market Capitalization': 25_000_000_000, 'Revenue Growth (YoY)': '18.4%',
-      'Net Income Growth (YoY)': '22.1%', 'Free Cash Flow Growth (YoY)': '-3.2%',
-      'Gross Profit Margin (Yr)': '64.5%', 'P/E Ratio': 27.3, 'P/S Ratio': 6.4,
-      'Stock Price': 105.2,
+      'Market Cap': 25_000_000_000, 'Revenue Growth (1y) (TTM)': '18.4%',
+      'Net Income Growth (1y) (TTM)': '22.1%', 'FCF Growth (1y) (TTM)': '-3.2%',
+      'Gross Margin (TTM)': '64.5%', 'P/E': 27.3, 'P/S': 6.4,
+      'Price': 105.2,
     }, metrics)
 
     expect(stock).toEqual(expect.objectContaining({

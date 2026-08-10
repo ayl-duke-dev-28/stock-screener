@@ -6,11 +6,11 @@
   "scripts": {
     "dev": "concurrently -k -n api,web -c green,cyan \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch server/index.ts",
-    "dev:web": "vite",
+    "dev:web": "vite --config vite.config.ts",
     "start": "tsx server/index.ts",
-    "build": "tsc -b && vite build",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "build": "tsc -b && vite build --config vite.config.ts",
+    "test": "vitest run --config vite.config.ts",
+    "test:coverage": "vitest run --config vite.config.ts --coverage"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

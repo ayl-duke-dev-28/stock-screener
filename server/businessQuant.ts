@@ -10,33 +10,40 @@ export interface ProviderMetric {
 }
 
 export interface MetricMap {
-  marketCap?: string
-  revenueGrowth?: string
-  earningsGrowth?: string
-  fcfGrowth?: string
-  grossMargin?: string
-  pe?: string
-  ps?: string
-  price?: string
-  change?: string
-  insiderActivity?: string
+  marketCap?: ResolvedMetric
+  revenueGrowth?: ResolvedMetric
+  earningsGrowth?: ResolvedMetric
+  fcfGrowth?: ResolvedMetric
+  grossMargin?: ResolvedMetric
+  pe?: ResolvedMetric
+  ps?: ResolvedMetric
+  price?: ResolvedMetric
+  change?: ResolvedMetric
+  insiderActivity?: ResolvedMetric
+}
+
+export interface ResolvedMetric {
+  requestKey: string
+  responseKey: string
 }
 
 type ProviderRecord = Record<string, unknown>
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
 const findMetric = (metadata: ProviderMetric[], patterns: RegExp[]) =>
-  metadata.find((metric) => patterns.some((pattern) => pattern.test(metric.metric_full) || pattern.test(metric.metric_short ?? '')))?.metric_full
+  metadata
+    .filter((metric) => patterns.some((pattern) => pattern.test(metric.metric_full) || pattern.test(metric.metric_short ?? '')))
+    .map((metric) => ({ requestKey: metric.metric_full, responseKey: metric.metric_short ?? metric.metric_full }))[0]
 
 export function resolveMetrics(metadata: ProviderMetric[]): MetricMap {
   return {
     marketCap: findMetric(metadata, [/^market capitalization$/i, /^market cap$/i]),
-    revenueGrowth: findMetric(metadata, [/revenue growth.*yoy/i, /revenue.*growth/i]),
-    earningsGrowth: findMetric(metadata, [/net income growth.*yoy/i, /eps growth.*yoy/i, /earnings growth/i]),
-    fcfGrowth: findMetric(metadata, [/free cash flow growth.*yoy/i, /fcf growth/i]),
-    grossMargin: findMetric(metadata, [/gross profit margin.*yr/i, /^gross margin/i]),
-    pe: findMetric(metadata, [/^p\/e ratio$/i, /^price.to.earnings/i]),
-    ps: findMetric(metadata, [/^p\/s ratio$/i, /^price.to.sales/i]),
+    revenueGrowth: findMetric(metadata, [/^revenue growth \(1y\) \(ttm\)$/i, /revenue growth.*yoy/i, /revenue.*growth/i]),
+    earningsGrowth: findMetric(metadata, [/^net income growth \(1y\) \(ttm\)$/i, /net income growth.*yoy/i, /eps growth.*yoy/i, /earnings growth/i]),
+    fcfGrowth: findMetric(metadata, [/^free cash flow growth \(1y\) \(ttm\)$/i, /free cash flow growth.*yoy/i, /fcf growth/i]),
+    grossMargin: findMetric(metadata, [/^gross margin \(ttm\)$/i, /gross profit margin.*yr/i, /^gross margin/i]),
+    pe: findMetric(metadata, [/^price to earnings$/i, /^p\/e ratio$/i, /^price.to.earnings/i]),
+    ps: findMetric(metadata, [/^price to sales$/i, /^p\/s ratio$/i, /^price.to.sales/i]),
     price: findMetric(metadata, [/^stock price$/i, /^current price$/i, /^share price$/i]),
     change: findMetric(metadata, [/price change.*%/i, /1d.*change/i]),
     insiderActivity: findMetric(metadata, [/net insider.*(buy|purchase)/i, /insider.*activity/i]),
@@ -50,8 +57,8 @@ const numeric = (value: unknown, fallback: number) => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
-const getMetric = (record: ProviderRecord, key: string | undefined, fallback: number) =>
-  key ? numeric(record[key], fallback) : fallback
+const getMetric = (record: ProviderRecord, metric: ResolvedMetric | undefined, fallback: number) =>
+  metric ? numeric(record[metric.responseKey] ?? record[metric.requestKey], fallback) : fallback
 
 export function mapProviderStock(record: ProviderRecord, metrics: MetricMap): Stock {
   const ticker = String(record.ticker ?? record.symbol ?? '').trim().toUpperCase()
@@ -94,7 +101,7 @@ export async function fetchUsMarket(apiKey: string, fetcher: Fetcher = fetch, pa
   metadataUrl.searchParams.set('api_key', apiKey)
   const metadata = await readJson<ProviderMetric[]>(await fetcher(metadataUrl))
   const metrics = resolveMetrics(metadata)
-  const preferredColumns = Array.from(new Set(Object.values(metrics).filter(Boolean)))
+  const preferredColumns = Array.from(new Set(Object.values(metrics).flatMap((metric) => metric ? [metric.requestKey] : [])))
 
   const fetchPage = async (page: number) => {
     const url = new URL('/screener', BASE_URL)
