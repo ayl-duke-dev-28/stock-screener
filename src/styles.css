@@ -86,5 +86,42 @@ button { color: inherit; }
 .thesis-lead { font-family: Newsreader; font-size: 19px; line-height: 1.4; color: #35443e; margin: 15px 0 18px; }.thesis-point { display: flex; gap: 10px; margin-top: 12px; }.thesis-point svg { color: var(--green); padding: 3px; background: #e1eee8; border-radius: 50%; flex: none; }.thesis-point p { font-size: 9px; color: #76817c; line-height: 1.5; margin: 0; }.thesis-point strong { color: #34423c; }.thesis-note { display: flex; gap: 6px; color: #929b96; font-size: 8px; border-top: 1px solid #eceeea; padding-top: 14px; margin-top: 16px; }
 .ideas-hero { min-height: 260px; display: grid; grid-template-columns: 1fr .75fr; align-items: center; gap: 8vw; }.ideas-hero h1, .simple-hero h1 { font-size: clamp(44px,5vw,70px); line-height: .95; margin: 12px 0; }.ideas-hero p { color: var(--muted); }.idea-feature { padding: 20px; }.idea-feature > span { font-size: 8px; color: #7e8983; text-transform: uppercase; letter-spacing: .1em; }.idea-feature > div { display: flex; align-items: center; gap: 11px; margin-top: 12px; }.idea-feature > div > div:nth-child(2) { display: flex; flex-direction: column; flex: 1; }.idea-feature button { border: 0; background: none; color: var(--green); font-size: 9px; display: flex; align-items: center; gap: 4px; cursor: pointer; }.idea-feature button svg { width: 12px; }
 .theme-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }.theme-card { padding: 25px; overflow: hidden; position: relative; }.theme-card:before { content: ''; position: absolute; width: 120px; height: 120px; border-radius: 50%; right: -45px; top: -50px; opacity: .4; }.theme-card.sage:before { background: #bad8c8; }.theme-card.sand:before { background: #ead8ae; }.theme-card.blue:before { background: #bfced9; }.theme-tag { font-size: 8px; padding: 5px 8px; background: #edf1ed; border-radius: 10px; text-transform: uppercase; letter-spacing: .08em; }.theme-card h2 { font-family: Newsreader; font-size: 26px; margin: 18px 0 8px; }.theme-card > p { color: #74807a; font-size: 10px; line-height: 1.6; min-height: 48px; }.theme-picks { margin-top: 20px; border-top: 1px solid #e8ebe6; }.theme-picks button { border: 0; border-bottom: 1px solid #e8ebe6; background: none; width: 100%; padding: 13px 0; display: flex; justify-content: space-between; align-items: center; text-align: left; cursor: pointer; }.theme-picks button > span { display: flex; align-items: center; gap: 9px; }.theme-picks button > span > span { display: flex; flex-direction: column; max-width: 175px; }.theme-picks button > span:last-child > svg { width: 13px; color: #98a19c; }.simple-hero { padding: 45px 0 50px; }
+
+/* Readability pass: keep the compact research layout without sub-10px body copy. */
+.eyebrow { font-size: 11px; }
+.page-title p, .simple-hero p, .ideas-hero p { font-size: 16px; line-height: 1.55; }
+.as-of span, .as-of small { font-size: 11px; }
+.as-of strong, .search-box input, .filter-button, .save-button, .result-count { font-size: 13px; }
+.filter-panel-head div { font-size: 14px; }
+.filter-panel-head button { font-size: 12px; }
+.select-field > span, .slider-field > span > span { font-size: 11px; }
+.select-field select { font-size: 13px; }
+.slider-field > span strong { font-size: 13px; }
+.slider-field > small { font-size: 9px; }
+.priority-row > div:first-child span { font-size: 13px; }
+.priority-row > div:first-child small { font-size: 10px; }
+.priority-chips button, .toggle em { font-size: 11px; }
+.results-header p, .results-header label, .results-header select { font-size: 12px; }
+.table-head { font-size: 10px; }
+.table-row { font-size: 13px; }
+.company-cell small, .price-cell small, .signal-cell small, .idea-feature small, .theme-picks small { font-size: 10px; }
+.company-logo { font-size: 12px; }
+.signal-cell strong { font-size: 11px; }
+.score-badge.small { font-size: 11px; }
+.empty p, .back-button { font-size: 13px; }
+.detail-price { font-size: 15px; }
+.detail-price span { font-size: 12px; }
+.range-tabs button { font-size: 10px; }
+.rating-main p { font-size: 11px; }
+.score-badge.large small { font-size: 9px; }
+.breakdown-row > span, .breakdown-row b { font-size: 10px; }
+.live-dot { font-size: 10px; }
+.metric-list span { font-size: 10px; }
+.metric-list em { font-size: 9px; }
+.thesis-point p { font-size: 11px; }
+.thesis-note { font-size: 10px; }
+.idea-feature > span, .theme-tag { font-size: 10px; }
+.idea-feature button { font-size: 11px; }
+.theme-card > p { font-size: 12px; line-height: 1.65; }
 @media (max-width: 1100px) { .filter-grid { grid-template-columns: repeat(2,1fr); }.stock-table { grid-template-columns: 1.4fr 1.3fr .8fr .8fr .7fr 1fr 35px; }.stock-table > :nth-child(5), .stock-table > :nth-child(6) { display: none; }.theme-grid { grid-template-columns: 1fr; }.theme-card > p { min-height: 0; } }
 @media (max-width: 760px) { .topbar { padding: 0 18px; }.topbar nav { position: fixed; bottom: 0; left: 0; right: 0; height: 58px; margin: 0; background: #fbfcf8; justify-content: space-around; z-index: 30; border-top: 1px solid var(--line); }.topbar nav button { width: 33%; }.topbar nav button.active:after { top: 0; bottom: auto; }.dashboard, .detail-page { width: calc(100% - 28px); padding-top: 32px; }.page-title { align-items: flex-start; }.as-of { display: none; }.page-title h1 { font-size: 45px; }.toolbar-divider, .result-count, .search-box kbd { display: none; }.filter-grid { grid-template-columns: repeat(2,1fr); }.priority-row { align-items: flex-start; flex-direction: column; }.stock-table { grid-template-columns: 1.2fr 1fr .8fr 32px; column-gap: 8px; padding: 0 12px; }.stock-table > :nth-child(3), .stock-table > :nth-child(5), .stock-table > :nth-child(6), .stock-table > :nth-child(7), .stock-table > :nth-child(8) { display: none; }.price-cell .sparkline { display: none; }.ideas-hero { grid-template-columns: 1fr; padding-bottom: 35px; }.detail-header { align-items: flex-start; gap: 15px; }.company-heading h1 { font-size: 29px; }.save-button { padding: 10px; font-size: 0; }.detail-grid, .analysis-grid { grid-template-columns: 1fr; }.metric-list { grid-template-columns: repeat(2,1fr); }.metric-list > div:nth-child(3n) { border-right: 1px solid #eaede8; }.metric-list > div:nth-child(2n) { border-right: 0; }.metric-list > div:nth-child(n+4) { border-bottom: 1px solid #eaede8; }.metric-list > div:nth-child(n+5) { border-bottom: 0; }.hero-chart { height: 150px; } }
