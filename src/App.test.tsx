@@ -26,6 +26,29 @@ describe('screener criteria controls', () => {
     expect(screen.getByText('2', { selector: '.result-count strong' })).toBeInTheDocument()
   })
 
+  it('sorts every data column and toggles between descending and ascending', async () => {
+    render(<App />)
+    await waitFor(() => expect(screen.getByText('Sample fallback')).toBeInTheDocument())
+
+    const sortableColumns = ['Company', 'Price', 'Market cap', 'Revenue growth', 'FCF growth', 'Gross margin', 'P/E', 'Signal']
+    sortableColumns.forEach((column) => {
+      expect(screen.getByRole('button', { name: `Sort by ${column}` })).toBeInTheDocument()
+    })
+
+    const revenueHeader = screen.getByRole('button', { name: 'Sort by Revenue growth' })
+    const visibleTickers = () => Array.from(document.querySelectorAll('.table-row .company-cell strong')).map((node) => node.textContent)
+    const descending = [...stocks].sort((a, b) => b.revenueGrowth - a.revenueGrowth).map((stock) => stock.ticker)
+    const ascending = [...descending].reverse()
+
+    fireEvent.click(revenueHeader)
+    expect(visibleTickers()).toEqual(descending)
+    expect(revenueHeader).toHaveAttribute('data-direction', 'desc')
+
+    fireEvent.click(revenueHeader)
+    expect(visibleTickers()).toEqual(ascending)
+    expect(revenueHeader).toHaveAttribute('data-direction', 'asc')
+  })
+
   it('loads the full market and paginates large result sets without rendering thousands of rows', async () => {
     const fullMarket = Array.from({ length: 121 }, (_, index) => ({
       ...stocks[index % stocks.length],
