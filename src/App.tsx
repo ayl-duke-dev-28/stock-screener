@@ -16,7 +16,7 @@ const defaultFilters: Filters = {
 }
 
 type NumericFilterKey = 'minRevenueGrowth' | 'minEarningsGrowth' | 'minFcfGrowth' | 'minGrossMargin' | 'maxPe' | 'maxPs'
-type Quote = Pick<Stock, 'ticker' | 'price' | 'change' | 'sparkline'>
+type Quote = { ticker: string; price: number; change: number; sparkline: number[] }
 type SortKey = 'company' | 'price' | 'marketCap' | 'revenueGrowth' | 'fcfGrowth' | 'grossMargin' | 'pe' | 'score'
 type SortDirection = 'asc' | 'desc'
 type SortState = { key: SortKey; direction: SortDirection }
@@ -28,11 +28,17 @@ const numericFilterKeys = new Set<keyof Filters>([
 const sortRecommendations = (recommendations: ReturnType<typeof getRecommendations>, sort: SortState) => {
   const direction = sort.direction === 'asc' ? 1 : -1
   return [...recommendations].sort((a, b) => {
+    if (sort.key !== 'company' && sort.key !== 'score') {
+      const left = a.stock[sort.key]
+      const right = b.stock[sort.key]
+      if (left === null && right === null) return a.stock.ticker.localeCompare(b.stock.ticker)
+      if (left === null) return 1
+      if (right === null) return -1
+      return ((left - right) || a.stock.ticker.localeCompare(b.stock.ticker)) * direction
+    }
     const comparison = sort.key === 'company'
       ? a.stock.ticker.localeCompare(b.stock.ticker)
-      : sort.key === 'score'
-        ? a.score - b.score
-        : a.stock[sort.key] - b.stock[sort.key]
+      : a.score - b.score
     return (comparison || a.stock.ticker.localeCompare(b.stock.ticker)) * direction
   })
 }
@@ -44,13 +50,17 @@ const metricOptions: { key: MetricKey; label: string }[] = [
   { key: 'grossMargin', label: 'Gross margin' },
   { key: 'pe', label: 'P/E' },
   { key: 'ps', label: 'P/S' },
-  { key: 'insiderActivity', label: 'Insider activity' },
 ]
 
 const scoreColor = (score: number) => score >= 75 ? '#16856b' : score >= 55 ? '#c0841a' : '#a45b52'
-const formatMarketCap = (value: number) => value >= 1000 ? `$${(value / 1000).toFixed(2)}T` : `$${value.toFixed(0)}B`
+const formatMetric = (value: number | null, suffix: string, digits = 1) => value === null ? 'N/A' : `${value.toFixed(digits)}${suffix}`
+const formatPrice = (value: number | null) => value === null ? 'N/A' : `$${value.toFixed(2)}`
+const formatMarketCap = (value: number | null) => value === null ? 'N/A' : value >= 1000 ? `$${(value / 1000).toFixed(2)}T` : `$${value.toFixed(0)}B`
+const exceeds = (value: number | null, threshold: number) => value !== null && value > threshold
+const below = (value: number | null, threshold: number) => value !== null && value < threshold
 
 function Sparkline({ values, positive = true, large = false }: { values: number[]; positive?: boolean; large?: boolean }) {
+  if (values.length < 2) return <span className={large ? 'hero-chart' : 'sparkline'} role="img" aria-label="Price trend unavailable">—</span>
   const width = large ? 640 : 92
   const height = large ? 190 : 34
   const min = Math.min(...values)
@@ -94,26 +104,26 @@ function BreakdownBars({ breakdown }: { breakdown: ScoreBreakdown }) {
 
 function StockDetail({ stock, priorities, isSaved, onBack, onToggleSave }: { stock: Stock; priorities: MetricKey[]; isSaved: boolean; onBack: () => void; onToggleSave: () => void }) {
   const result = scoreStock(stock, priorities)
-  const metrics = [
-    ['Revenue growth', `${stock.revenueGrowth.toFixed(1)}%`, stock.revenueGrowth > 15],
-    ['Earnings growth', `${stock.earningsGrowth.toFixed(1)}%`, stock.earningsGrowth > 15],
-    ['Free cash flow growth', `${stock.fcfGrowth.toFixed(1)}%`, stock.fcfGrowth > 15],
-    ['Gross margin', `${stock.grossMargin.toFixed(1)}%`, stock.grossMargin > 50],
-    ['P/E ratio', `${stock.pe.toFixed(1)}×`, stock.pe < 30],
-    ['P/S ratio', `${stock.ps.toFixed(1)}×`, stock.ps < 8],
+  const metrics: Array<[string, string, boolean | null]> = [
+    ['Revenue growth', formatMetric(stock.revenueGrowth, '%'), stock.revenueGrowth === null ? null : exceeds(stock.revenueGrowth, 15)],
+    ['Earnings growth', formatMetric(stock.earningsGrowth, '%'), stock.earningsGrowth === null ? null : exceeds(stock.earningsGrowth, 15)],
+    ['Free cash flow growth', formatMetric(stock.fcfGrowth, '%'), stock.fcfGrowth === null ? null : exceeds(stock.fcfGrowth, 15)],
+    ['Gross margin', formatMetric(stock.grossMargin, '%'), stock.grossMargin === null ? null : exceeds(stock.grossMargin, 50)],
+    ['P/E ratio', formatMetric(stock.pe, '×'), stock.pe === null ? null : below(stock.pe, 30)],
+    ['P/S ratio', formatMetric(stock.ps, '×'), stock.ps === null ? null : below(stock.ps, 8)],
   ]
   return <main className="detail-page">
     <button className="back-button" onClick={onBack}><ArrowLeft size={16}/> Back to screener</button>
     <section className="detail-header">
-      <div className="company-heading"><div className="company-logo large-logo">{stock.ticker.slice(0, 1)}</div><div><div className="eyebrow">{stock.sector} · NASDAQ</div><h1>{stock.name} <span>{stock.ticker}</span></h1><div className="detail-price">${stock.price.toFixed(2)} <span className={stock.change >= 0 ? 'positive' : 'negative'}>{stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%</span></div></div></div>
+      <div className="company-heading"><div className="company-logo large-logo">{stock.ticker.slice(0, 1)}</div><div><div className="eyebrow">{stock.sector}</div><h1>{stock.name} <span>{stock.ticker}</span></h1><div className="detail-price">{formatPrice(stock.price)} {stock.change !== null && <span className={stock.change >= 0 ? 'positive' : 'negative'}>{stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%</span>}</div></div></div>
       <button className={`save-button ${isSaved ? 'saved' : ''}`} onClick={onToggleSave}>{isSaved ? <BookmarkCheck size={17}/> : <Bookmark size={17}/>} {isSaved ? 'Saved' : 'Add to watchlist'}</button>
     </section>
     <section className="detail-grid">
-      <div className="chart-card card"><div className="card-heading"><div><span className="eyebrow">Price performance</span><h2>12 month trajectory</h2></div><div className="range-tabs"><button>1M</button><button>6M</button><button className="active">1Y</button><button>5Y</button></div></div><Sparkline values={stock.sparkline} positive={stock.change >= 0} large/></div>
-      <div className="rating-card card"><span className="eyebrow">Signal rating</span><div className="rating-main"><ScoreBadge score={result.score} size="large"/><div><h2>{scoreToLabel(result.score)}</h2><p>Based on {priorities.length || 7} selected criteria</p></div></div><BreakdownBars breakdown={result.breakdown}/></div>
+      <div className="chart-card card"><div className="card-heading"><div><span className="eyebrow">Price performance</span><h2>12 month trajectory</h2></div><div className="range-tabs"><button>1M</button><button>6M</button><button className="active">1Y</button><button>5Y</button></div></div><Sparkline values={stock.sparkline} positive={stock.change === null || stock.change >= 0} large/></div>
+      <div className="rating-card card"><span className="eyebrow">Signal rating</span><div className="rating-main"><ScoreBadge score={result.score} size="large"/><div><h2>{scoreToLabel(result.score)}</h2><p>Based on up to {priorities.length || 6} selected criteria with available data</p></div></div><BreakdownBars breakdown={result.breakdown}/></div>
     </section>
     <section className="analysis-grid">
-      <div className="card metric-card"><div className="card-heading"><div><span className="eyebrow">Fundamentals</span><h2>Scorecard</h2></div><span className="live-dot"><i/> Latest reported</span></div><div className="metric-list">{metrics.map(([label, value, good]) => <div key={String(label)}><span>{label}</span><strong>{value}</strong><em className={good ? 'metric-good' : 'metric-neutral'}>{good ? 'Above benchmark' : 'Within range'}</em></div>)}</div></div>
+      <div className="card metric-card"><div className="card-heading"><div><span className="eyebrow">Fundamentals</span><h2>Scorecard</h2></div><span className="live-dot"><i/> Latest reported</span></div><div className="metric-list">{metrics.map(([label, value, good]) => <div key={String(label)}><span>{label}</span><strong>{value}</strong><em className={good ? 'metric-good' : 'metric-neutral'}>{good === null ? 'Not reported' : good ? 'Above benchmark' : 'Within range'}</em></div>)}</div></div>
       <div className="card thesis-card"><span className="eyebrow">Investment lens</span><h2>Why it stands out</h2><p className="thesis-lead">{stock.thesis}</p><div className="thesis-point"><Check size={16}/><p><strong>Growth signal</strong><br/>Revenue and earnings trends are evaluated against the current screened universe.</p></div><div className="thesis-point"><Check size={16}/><p><strong>Valuation context</strong><br/>Multiples are scored inversely and balanced against business quality.</p></div><div className="thesis-note"><CircleHelp size={15}/> Scores are research aids, not investment advice.</div></div>
     </section>
   </main>
@@ -229,7 +239,7 @@ export default function App() {
         {filterOpen && <section className="filter-panel card">
           <div className="filter-panel-head"><div><ListFilter size={17}/><strong>Refine universe</strong></div><button onClick={resetFilters}>Reset all</button></div>
           <div className="filter-grid"><label className="select-field"><span>Sector</span><div><select value={filters.sector} onChange={(event) => patchFilter('sector', event.target.value)}>{availableSectors.map((sector) => <option key={sector}>{sector}</option>)}</select><ChevronDown size={14}/></div></label><label className="select-field"><span>Market cap</span><div><select value={filters.marketCap} onChange={(event) => patchFilter('marketCap', event.target.value as Filters['marketCap'])}><option value="all">Any size</option><option value="mega">Mega cap ($200B+)</option><option value="large">Large cap ($10–200B)</option><option value="mid">Mid cap ($2–10B)</option><option value="small">Small cap (&lt;$2B)</option></select><ChevronDown size={14}/></div></label><SliderField label="Min. revenue growth" value={filters.minRevenueGrowth} min={-10} max={60} step={1} suffix="%" onChange={(value) => patchFilter('minRevenueGrowth', value)}/><SliderField label="Min. earnings growth" value={filters.minEarningsGrowth} min={-20} max={80} step={1} suffix="%" onChange={(value) => patchFilter('minEarningsGrowth', value)}/><SliderField label="Min. FCF growth" value={filters.minFcfGrowth} min={-20} max={60} step={1} suffix="%" onChange={(value) => patchFilter('minFcfGrowth', value)}/><SliderField label="Min. gross margin" value={filters.minGrossMargin} min={0} max={90} step={1} suffix="%" onChange={(value) => patchFilter('minGrossMargin', value)}/><SliderField label="Max. P/E ratio" value={filters.maxPe} min={5} max={80} step={1} suffix="×" onChange={(value) => patchFilter('maxPe', value)}/><SliderField label="Max. P/S ratio" value={filters.maxPs} min={1} max={30} step={1} suffix="×" onChange={(value) => patchFilter('maxPs', value)}/></div>
-          <div className="priority-row"><div><span>Score priorities</span><small>Ratings adapt to what matters to you</small></div><div className="priority-chips">{metricOptions.map(({ key, label }) => <button className={priorities.includes(key) ? 'selected' : ''} onClick={() => togglePriority(key)} key={key}>{priorities.includes(key) && <Check size={12}/>} {label}</button>)}</div><label className="toggle"><input type="checkbox" checked={filters.insiderOnly} onChange={(event) => patchFilter('insiderOnly', event.target.checked)}/><span/><em>Insider buying only</em></label></div>
+          <div className="priority-row"><div><span>Score priorities</span><small>Ratings adapt to what matters to you</small></div><div className="priority-chips">{metricOptions.map(({ key, label }) => <button className={priorities.includes(key) ? 'selected' : ''} onClick={() => togglePriority(key)} key={key}>{priorities.includes(key) && <Check size={12}/>} {label}</button>)}</div><label className="toggle" title={dataSource === 'live' ? 'The current screener feed does not include insider transactions yet.' : undefined}><input type="checkbox" disabled={dataSource === 'live'} checked={filters.insiderOnly} onChange={(event) => patchFilter('insiderOnly', event.target.checked)}/><span/><em>{dataSource === 'live' ? 'Insider data not connected' : 'Insider buying only'}</em></label></div>
         </section>}
         <section className="results-header"><div><h2>Ranked companies</h2><p>Click any column heading to change the ranking</p></div><label>Sort by <select value={sort.key} onChange={(event) => setSort({ key: event.target.value as SortKey, direction: 'desc' })}><option value="score">Signal score</option><option value="company">Company</option><option value="price">Price</option><option value="marketCap">Market cap</option><option value="revenueGrowth">Revenue growth</option><option value="fcfGrowth">FCF growth</option><option value="grossMargin">Gross margin</option><option value="pe">P/E</option></select></label></section>
         <StockTable ranked={displayedPage} watchlist={watchlist} sort={sort} onSort={changeSort} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>
@@ -261,14 +271,14 @@ function StockTable({ ranked, watchlist, sort, onSort, onOpen, onToggleSave }: {
     { key: 'pe', label: 'P/E', accessibleLabel: 'P/E' },
     { key: 'score', label: 'Signal', accessibleLabel: 'Signal' },
   ]
-  return <section className="table-card card"><div className="stock-table table-head">{columns.map((column) => { const active = sort.key === column.key; return <button type="button" aria-label={`Sort by ${column.accessibleLabel}`} className={active ? 'active' : ''} data-direction={active ? sort.direction : undefined} onClick={() => onSort(column.key)} key={column.key}><span>{column.label}</span>{active && (sort.direction === 'desc' ? <ArrowDown/> : <ArrowUp/>)}</button> })}<span/></div>{ranked.map(({ stock, score }) => <button className="stock-table table-row" key={stock.ticker} onClick={() => onOpen(stock)}><span className="company-cell"><i className="company-logo">{stock.ticker[0]}</i><span><strong>{stock.ticker}</strong><small>{stock.name}</small></span></span><span className="price-cell"><span><strong>${stock.price.toFixed(2)}</strong><small className={stock.change >= 0 ? 'positive' : 'negative'}>{stock.change >= 0 ? <ArrowUpRight/> : <ArrowDownRight/>}{Math.abs(stock.change).toFixed(2)}%</small></span><Sparkline values={stock.sparkline} positive={stock.change >= 0}/></span><span>{formatMarketCap(stock.marketCap)}</span><span className={stock.revenueGrowth >= 15 ? 'metric-good' : ''}>{stock.revenueGrowth.toFixed(1)}%</span><span className={stock.fcfGrowth >= 15 ? 'metric-good' : ''}>{stock.fcfGrowth.toFixed(1)}%</span><span>{stock.grossMargin.toFixed(1)}%</span><span>{stock.pe.toFixed(1)}×</span><span className="signal-cell"><ScoreBadge score={score}/><span><strong>{scoreToLabel(score)}</strong><small>of 100</small></span></span><span className="row-actions"><i onClick={(event) => { event.stopPropagation(); onToggleSave(stock.ticker) }}>{watchlist.includes(stock.ticker) ? <BookmarkCheck/> : <Bookmark/>}</i><ArrowRight/></span></button>)}</section>
+  return <section className="table-card card"><div className="stock-table table-head">{columns.map((column) => { const active = sort.key === column.key; return <button type="button" aria-label={`Sort by ${column.accessibleLabel}`} className={active ? 'active' : ''} data-direction={active ? sort.direction : undefined} onClick={() => onSort(column.key)} key={column.key}><span>{column.label}</span>{active && (sort.direction === 'desc' ? <ArrowDown/> : <ArrowUp/>)}</button> })}<span/></div>{ranked.map(({ stock, score }) => <button className="stock-table table-row" key={stock.ticker} onClick={() => onOpen(stock)}><span className="company-cell"><i className="company-logo">{stock.ticker[0]}</i><span><strong>{stock.ticker}</strong><small>{stock.name}</small></span></span><span className="price-cell"><span><strong>{formatPrice(stock.price)}</strong>{stock.change === null ? <small>N/A</small> : <small className={stock.change >= 0 ? 'positive' : 'negative'}>{stock.change >= 0 ? <ArrowUpRight/> : <ArrowDownRight/>}{Math.abs(stock.change).toFixed(2)}%</small>}</span><Sparkline values={stock.sparkline} positive={stock.change === null || stock.change >= 0}/></span><span>{formatMarketCap(stock.marketCap)}</span><span className={exceeds(stock.revenueGrowth, 15) ? 'metric-good' : ''}>{formatMetric(stock.revenueGrowth, '%')}</span><span className={exceeds(stock.fcfGrowth, 15) ? 'metric-good' : ''}>{formatMetric(stock.fcfGrowth, '%')}</span><span>{formatMetric(stock.grossMargin, '%')}</span><span>{formatMetric(stock.pe, '×')}</span><span className="signal-cell"><ScoreBadge score={score}/><span><strong>{scoreToLabel(score)}</strong><small>of 100</small></span></span><span className="row-actions"><i onClick={(event) => { event.stopPropagation(); onToggleSave(stock.ticker) }}>{watchlist.includes(stock.ticker) ? <BookmarkCheck/> : <Bookmark/>}</i><ArrowRight/></span></button>)}</section>
 }
 
 function Ideas({ universe, priorities, onOpen }: { universe: Stock[]; priorities: MetricKey[]; onOpen: (stock: Stock) => void }) {
   const themes = [
-    { title: 'Profitable compounders', tag: 'Quality growth', copy: 'Strong top-line growth, expanding cash generation, and durable margins.', color: 'sage', picks: getRecommendations(universe.filter((s) => s.revenueGrowth > 15 && s.fcfGrowth > 18), ['revenueGrowth', 'fcfGrowth', 'grossMargin']).slice(0, 3) },
-    { title: 'Growth at a fair price', tag: 'GARP', copy: 'Above-market earnings growth without the most demanding valuation multiples.', color: 'sand', picks: getRecommendations(universe.filter((s) => s.earningsGrowth > 20 && s.pe < 35), ['earningsGrowth', 'pe', 'ps']).slice(0, 3) },
-    { title: 'Insiders leaning in', tag: 'Smart money', copy: 'Positive insider activity paired with improving fundamental momentum.', color: 'blue', picks: getRecommendations(universe.filter((s) => s.insiderActivity > 3), ['insiderActivity', 'earningsGrowth']).slice(0, 3) },
+    { title: 'Profitable compounders', tag: 'Quality growth', copy: 'Strong top-line growth, expanding cash generation, and durable margins.', color: 'sage', picks: getRecommendations(universe.filter((s) => exceeds(s.revenueGrowth, 15) && exceeds(s.fcfGrowth, 18)), ['revenueGrowth', 'fcfGrowth', 'grossMargin']).slice(0, 3) },
+    { title: 'Growth at a fair price', tag: 'GARP', copy: 'Above-market earnings growth without the most demanding valuation multiples.', color: 'sand', picks: getRecommendations(universe.filter((s) => exceeds(s.earningsGrowth, 20) && below(s.pe, 35)), ['earningsGrowth', 'pe', 'ps']).slice(0, 3) },
+    { title: 'Insiders leaning in', tag: 'Smart money', copy: 'Positive insider activity paired with improving fundamental momentum.', color: 'blue', picks: getRecommendations(universe.filter((s) => exceeds(s.insiderActivity, 3)), ['insiderActivity', 'earningsGrowth']).slice(0, 3) },
   ]
   const top = getRecommendations(universe, priorities)[0]
   return <><section className="ideas-hero"><div><span className="eyebrow"><Sparkles size={14}/> Signal ideas</span><h1>A sharper place to start.</h1><p>Curated research themes built from fundamental signals—not hype.</p></div><div className="idea-feature card"><span>Highest conviction today</span><div><div className="company-logo">{top.stock.ticker[0]}</div><div><strong>{top.stock.ticker}</strong><small>{top.stock.name}</small></div><ScoreBadge score={top.score}/><button onClick={() => onOpen(top.stock)}>View thesis <ArrowRight/></button></div></div></section><section className="theme-grid">{themes.map((theme) => <article className={`theme-card card ${theme.color}`} key={theme.title}><span className="theme-tag">{theme.tag}</span><h2>{theme.title}</h2><p>{theme.copy}</p><div className="theme-picks">{theme.picks.map((pick) => <button key={pick.stock.ticker} onClick={() => onOpen(pick.stock)}><span><i className="company-logo">{pick.stock.ticker[0]}</i><span><strong>{pick.stock.ticker}</strong><small>{pick.reason}</small></span></span><span><ScoreBadge score={pick.score}/><ArrowRight/></span></button>)}</div></article>)}</section></>

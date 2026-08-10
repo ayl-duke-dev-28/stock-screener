@@ -14,16 +14,16 @@ export interface Stock {
   ticker: string
   name: string
   sector: string
-  price: number
-  change: number
-  marketCap: number
-  revenueGrowth: number
-  earningsGrowth: number
-  fcfGrowth: number
-  grossMargin: number
-  pe: number
-  ps: number
-  insiderActivity: number
+  price: number | null
+  change: number | null
+  marketCap: number | null
+  revenueGrowth: number | null
+  earningsGrowth: number | null
+  fcfGrowth: number | null
+  grossMargin: number | null
+  pe: number | null
+  ps: number | null
+  insiderActivity: number | null
   sparkline: number[]
   thesis: string
 }

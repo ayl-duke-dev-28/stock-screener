@@ -46,10 +46,14 @@ export interface StockQuote {
   sparkline: number[]
 }
 
-const findMetric = (metadata: ProviderMetric[], patterns: RegExp[]) =>
-  metadata
-    .filter((metric) => patterns.some((pattern) => pattern.test(metric.metric_full) || pattern.test(metric.metric_short ?? '')))
-    .map((metric) => ({ requestKey: metric.metric_full, responseKey: metric.metric_short ?? metric.metric_full }))[0]
+const findMetric = (metadata: ProviderMetric[], patterns: RegExp[]) => {
+  for (const pattern of patterns) {
+    const metric = metadata.find((candidate) =>
+      pattern.test(candidate.metric_full) || pattern.test(candidate.metric_short ?? ''),
+    )
+    if (metric) return { requestKey: metric.metric_full, responseKey: metric.metric_short ?? metric.metric_full }
+  }
+}
 
 export function resolveMetrics(metadata: ProviderMetric[]): MetricMap {
   return {
@@ -66,21 +70,21 @@ export function resolveMetrics(metadata: ProviderMetric[]): MetricMap {
   }
 }
 
-const numeric = (value: unknown, fallback: number) => {
+const numeric = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value !== 'string') return fallback
+  if (typeof value !== 'string') return null
   const parsed = Number(value.replace(/[$,%×,]/g, '').trim())
-  return Number.isFinite(parsed) ? parsed : fallback
+  return Number.isFinite(parsed) ? parsed : null
 }
 
-const getMetric = (record: ProviderRecord, metric: ResolvedMetric | undefined, fallback: number) =>
-  metric ? numeric(record[metric.responseKey] ?? record[metric.requestKey], fallback) : fallback
+const getMetric = (record: ProviderRecord, metric: ResolvedMetric | undefined) =>
+  metric ? numeric(record[metric.responseKey] ?? record[metric.requestKey]) : null
 
 export function mapProviderStock(record: ProviderRecord, metrics: MetricMap): Stock {
   const ticker = String(record.ticker ?? record.symbol ?? '').trim().toUpperCase()
-  const price = getMetric(record, metrics.price, 0)
-  const change = getMetric(record, metrics.change, 0)
-  const rawMarketCap = getMetric(record, metrics.marketCap, 0)
+  const price = getMetric(record, metrics.price)
+  const change = getMetric(record, metrics.change)
+  const rawMarketCap = getMetric(record, metrics.marketCap)
   const sector = String(record.sector ?? 'Unclassified')
   return {
     ticker,
@@ -88,15 +92,15 @@ export function mapProviderStock(record: ProviderRecord, metrics: MetricMap): St
     sector,
     price,
     change,
-    marketCap: rawMarketCap / 1_000_000_000,
-    revenueGrowth: getMetric(record, metrics.revenueGrowth, -999),
-    earningsGrowth: getMetric(record, metrics.earningsGrowth, -999),
-    fcfGrowth: getMetric(record, metrics.fcfGrowth, -999),
-    grossMargin: getMetric(record, metrics.grossMargin, -999),
-    pe: getMetric(record, metrics.pe, 999),
-    ps: getMetric(record, metrics.ps, 999),
-    insiderActivity: getMetric(record, metrics.insiderActivity, 0),
-    sparkline: Array.from({ length: 10 }, (_, index) => price > 0 ? price * (1 - change / 100 + (change / 100) * (index / 9)) : 0),
+    marketCap: rawMarketCap === null ? null : rawMarketCap / 1_000_000_000,
+    revenueGrowth: getMetric(record, metrics.revenueGrowth),
+    earningsGrowth: getMetric(record, metrics.earningsGrowth),
+    fcfGrowth: getMetric(record, metrics.fcfGrowth),
+    grossMargin: getMetric(record, metrics.grossMargin),
+    pe: getMetric(record, metrics.pe),
+    ps: getMetric(record, metrics.ps),
+    insiderActivity: getMetric(record, metrics.insiderActivity),
+    sparkline: [],
     thesis: `${sector} company ranked against the active fundamental criteria.`,
   }
 }
@@ -137,8 +141,8 @@ export async function fetchStockQuotes(apiKey: string, tickers: string[], fetche
       ? singleTickerPayload
       : (payload as Record<string, ProviderQuoteSeries>)[ticker]
     const newestFirst = (series?.data ?? [])
-      .map((bar) => numeric(bar.close, Number.NaN))
-      .filter(Number.isFinite)
+      .map((bar) => numeric(bar.close))
+      .filter((value): value is number => value !== null)
     if (!newestFirst.length) return []
     const latest = newestFirst[0]
     const previous = newestFirst[1] ?? latest

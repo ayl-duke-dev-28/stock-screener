@@ -37,7 +37,7 @@ describe('screener criteria controls', () => {
 
     const revenueHeader = screen.getByRole('button', { name: 'Sort by Revenue growth' })
     const visibleTickers = () => Array.from(document.querySelectorAll('.table-row .company-cell strong')).map((node) => node.textContent)
-    const descending = [...stocks].sort((a, b) => b.revenueGrowth - a.revenueGrowth).map((stock) => stock.ticker)
+    const descending = [...stocks].sort((a, b) => (b.revenueGrowth ?? Number.NEGATIVE_INFINITY) - (a.revenueGrowth ?? Number.NEGATIVE_INFINITY)).map((stock) => stock.ticker)
     const ascending = [...descending].reverse()
 
     fireEvent.click(revenueHeader)
@@ -54,7 +54,7 @@ describe('screener criteria controls', () => {
       ...stocks[index % stocks.length],
       ticker: `T${String(index + 1).padStart(3, '0')}`,
       name: `Company ${index + 1}`,
-      ...(index % 10 === 0 ? { revenueGrowth: -999, earningsGrowth: -999, fcfGrowth: -999, pe: 999, ps: 999 } : {}),
+      ...(index % 10 === 0 ? { revenueGrowth: null, earningsGrowth: null, fcfGrowth: null, pe: null, ps: null } : {}),
     }))
     const fetcher = vi.fn().mockImplementation((input: string) => {
       if (String(input).startsWith('/api/quotes')) {
@@ -79,5 +79,28 @@ describe('screener criteria controls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
     expect(screen.getByText('Page 2 of 3')).toBeInTheDocument()
+  })
+
+  it('renders reported fundamentals and labels missing values without sentinel numbers', async () => {
+    const aapl = {
+      ...stocks[0], ticker: 'AAPL', name: 'Apple Inc.', price: 311, change: null,
+      marketCap: 4600.18652625, revenueGrowth: 14.2424, earningsGrowth: 29.865,
+      fcfGrowth: 42.1058, grossMargin: 48.6529, pe: 35.6797, ps: 9.8542,
+      insiderActivity: null, sparkline: [],
+    }
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: string) => Promise.resolve(new Response(JSON.stringify(
+      String(input).startsWith('/api/quotes')
+        ? { quotes: [] }
+        : { stocks: [aapl], total: 1, source: 'Business Quant' },
+    )))))
+
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('14.2%')).toBeInTheDocument())
+    expect(screen.getByText('42.1%')).toBeInTheDocument()
+    expect(screen.getByText('48.7%')).toBeInTheDocument()
+    expect(screen.getByText('35.7×')).toBeInTheDocument()
+    expect(screen.getByText('N/A')).toBeInTheDocument()
+    expect(screen.queryByText(/-999|999\.0/)).not.toBeInTheDocument()
   })
 })

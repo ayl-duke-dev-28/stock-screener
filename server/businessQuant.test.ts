@@ -26,6 +26,21 @@ describe('Business Quant market adapter', () => {
     }))
   })
 
+  it('prefers TTM metrics even when broader annual matches appear first in provider metadata', () => {
+    const annualFirstMetadata = [
+      { metric_full: 'Revenue Growth (1y) (Annual)', metric_short: 'Revenue Growth (1y) (Yr)' },
+      { metric_full: 'Free Cash Flow Growth (1y) (Annual)', metric_short: 'FCF Growth (1y) (Yr)' },
+      { metric_full: 'Gross Margin (Annual)', metric_short: 'Gross Margin (Yr)' },
+      ...metadata,
+    ]
+
+    expect(resolveMetrics(annualFirstMetadata)).toEqual(expect.objectContaining({
+      revenueGrowth: { requestKey: 'Revenue Growth (1y) (TTM)', responseKey: 'Revenue Growth (1y) (TTM)' },
+      fcfGrowth: { requestKey: 'Free Cash Flow Growth (1y) (TTM)', responseKey: 'FCF Growth (1y) (TTM)' },
+      grossMargin: { requestKey: 'Gross Margin (TTM)', responseKey: 'Gross Margin (TTM)' },
+    }))
+  })
+
   it('maps provider percentages and dollar values into the app stock model', () => {
     const metrics = resolveMetrics(metadata)
     const stock = mapProviderStock({
@@ -39,6 +54,24 @@ describe('Business Quant market adapter', () => {
     expect(stock).toEqual(expect.objectContaining({
       ticker: 'TEST', marketCap: 25, revenueGrowth: 18.4, earningsGrowth: 22.1,
       fcfGrowth: -3.2, grossMargin: 64.5, pe: 27.3, ps: 6.4, price: 105.2,
+    }))
+  })
+
+  it('represents unavailable provider values as missing instead of fabricated extremes', () => {
+    const stock = mapProviderStock({
+      ticker: 'MISS', name: 'Missing Metrics Inc.', sector: 'Technology',
+      'Market Cap': 1_000_000_000, Price: 10,
+    }, resolveMetrics(metadata))
+
+    expect(stock).toEqual(expect.objectContaining({
+      revenueGrowth: null,
+      earningsGrowth: null,
+      fcfGrowth: null,
+      grossMargin: null,
+      pe: null,
+      ps: null,
+      change: null,
+      insiderActivity: null,
     }))
   })
 
