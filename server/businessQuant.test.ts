@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fetchStockQuotes, fetchUsMarket, mapProviderStock, resolveMetrics } from './businessQuant'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fetchStockQuotes, fetchUsMarket, mapProviderStock, readMarketSnapshot, resolveMetrics, writeMarketSnapshot } from './businessQuant'
 
 const metadata = [
   { metric_full: 'Market Capitalization', metric_short: 'Market Cap', datatype: 'number' },
@@ -88,6 +91,30 @@ describe('Business Quant market adapter', () => {
     expect(fetcher).toHaveBeenCalledTimes(3)
     expect(String(fetcher.mock.calls[1][0])).toContain('page=1')
     expect(String(fetcher.mock.calls[2][0])).toContain('page=2')
+  })
+
+  it('requests up to 10,000 stocks by default to conserve the daily API allowance', async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(metadata)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ metadata: { total_records: 1, total_pages: 1 }, data: [{ ticker: 'AAA' }] })))
+
+    await fetchUsMarket('secret-key', fetcher)
+
+    expect(String(fetcher.mock.calls[1][0])).toContain('limit=10000')
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
+  it('persists and restores the last known full-market snapshot', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'signal-market-test-'))
+    const snapshotPath = join(directory, 'market.json')
+    const payload = { stocks: [mapProviderStock({ ticker: 'AAA', Price: 42 }, resolveMetrics(metadata))], total: 1, source: 'Business Quant', updatedAt: '2026-08-10T12:00:00.000Z' }
+
+    try {
+      await writeMarketSnapshot(snapshotPath, payload)
+      await expect(readMarketSnapshot(snapshotPath)).resolves.toEqual(payload)
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 
   it('rejects missing credentials before making a provider request', async () => {

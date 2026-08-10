@@ -4,14 +4,22 @@ import App from './App'
 import { stocks } from './data/stocks'
 
 describe('screener criteria controls', () => {
-  beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('API not configured'))))
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: string) => Promise.resolve(new Response(JSON.stringify(
+      String(input).startsWith('/api/quotes')
+        ? { quotes: [] }
+        : { stocks, total: stocks.length, source: 'Test market' },
+    )))))
+  })
   afterEachVitest(() => {
     cleanup()
     vi.unstubAllGlobals()
   })
 
-  it('uses live drag sliders for every numeric investment criterion', () => {
+  it('uses live drag sliders for every numeric investment criterion', async () => {
     render(<App />)
+
+    await waitFor(() => expect(screen.getByText('Test market')).toBeInTheDocument())
 
     const sliders = screen.getAllByRole('slider')
     expect(sliders).toHaveLength(6)
@@ -28,7 +36,7 @@ describe('screener criteria controls', () => {
 
   it('sorts every data column and toggles between descending and ascending', async () => {
     render(<App />)
-    await waitFor(() => expect(screen.getByText('Sample fallback')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Test market')).toBeInTheDocument())
 
     const sortableColumns = ['Company', 'Price', '1D performance', 'Market cap', 'Revenue growth', 'FCF growth', 'Gross margin', 'P/E', 'Signal']
     sortableColumns.forEach((column) => {
@@ -47,6 +55,19 @@ describe('screener criteria controls', () => {
     fireEvent.click(revenueHeader)
     expect(visibleTickers()).toEqual(ascending)
     expect(revenueHeader).toHaveAttribute('data-direction', 'asc')
+  })
+
+  it('never presents the 12 demo stocks or their prices when live market data fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: 'The market-data provider is temporarily unavailable.',
+    }), { status: 502 })))
+
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('Live data unavailable')).toBeInTheDocument())
+    expect(screen.getByText('0', { selector: '.result-count strong' })).toBeInTheDocument()
+    expect(screen.queryByText('AAPL', { selector: '.company-cell strong' })).not.toBeInTheDocument()
+    expect(screen.queryByText('$182.70')).not.toBeInTheDocument()
   })
 
   it('loads the full market and paginates large result sets without rendering thousands of rows', async () => {

@@ -1,4 +1,6 @@
 import type { Stock } from '../src/types'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 
 const BASE_URL = 'https://data.businessquant.com'
 
@@ -53,6 +55,13 @@ export type QuoteRange = '1d' | '1m' | '6m' | '1y' | '5y'
 export interface PricePoint {
   date: string
   price: number
+}
+
+export interface MarketPayload {
+  stocks: Stock[]
+  total: number
+  source: string
+  updatedAt: string
 }
 
 interface QuoteOptions {
@@ -186,7 +195,7 @@ export async function fetchStockQuotes(
   })
 }
 
-export async function fetchUsMarket(apiKey: string, fetcher: Fetcher = fetch, pageSize = 1000) {
+export async function fetchUsMarket(apiKey: string, fetcher: Fetcher = fetch, pageSize = 10000): Promise<MarketPayload> {
   if (!apiKey.trim()) throw new Error('BUSINESS_QUANT_API_KEY is not configured')
 
   const metadataUrl = new URL('/metadata', BASE_URL)
@@ -222,4 +231,21 @@ export async function fetchUsMarket(apiKey: string, fetcher: Fetcher = fetch, pa
     source: 'Business Quant',
     updatedAt: new Date().toISOString(),
   }
+}
+
+export async function readMarketSnapshot(filePath: string): Promise<MarketPayload | null> {
+  try {
+    const payload = JSON.parse(await readFile(filePath, 'utf8')) as MarketPayload
+    if (!Array.isArray(payload.stocks) || !payload.stocks.length || typeof payload.total !== 'number') return null
+    return payload
+  } catch {
+    return null
+  }
+}
+
+export async function writeMarketSnapshot(filePath: string, payload: MarketPayload) {
+  await mkdir(dirname(filePath), { recursive: true })
+  const temporaryPath = `${filePath}.${process.pid}.tmp`
+  await writeFile(temporaryPath, JSON.stringify(payload), 'utf8')
+  await rename(temporaryPath, filePath)
 }

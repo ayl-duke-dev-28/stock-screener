@@ -4,7 +4,6 @@ import {
   Bookmark, BookmarkCheck, Check, ChevronDown, CircleHelp, Filter, Lightbulb,
   ListFilter, Search, SlidersHorizontal, Sparkles, TrendingUp, X,
 } from 'lucide-react'
-import { stocks as sampleStocks } from './data/stocks'
 import { filterStocks, getRecommendations, scoreStock, scoreToLabel } from './lib/screener'
 import { paginate } from './lib/pagination'
 import type { Filters, MetricKey, ScoreBreakdown, Stock } from './types'
@@ -235,8 +234,8 @@ export default function App() {
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
   const [watchlist, setWatchlist] = useState<string[]>(['MSFT', 'UBER'])
   const [sort, setSort] = useState<SortState>({ key: 'score', direction: 'desc' })
-  const [marketStocks, setMarketStocks] = useState<Stock[]>(sampleStocks)
-  const [dataSource, setDataSource] = useState<'loading' | 'live' | 'sample'>('loading')
+  const [marketStocks, setMarketStocks] = useState<Stock[]>([])
+  const [dataSource, setDataSource] = useState<'loading' | 'live' | 'cached' | 'error'>('loading')
   const [sourceLabel, setSourceLabel] = useState('Connecting…')
   const [page, setPage] = useState(1)
   const [activeNumericFilters, setActiveNumericFilters] = useState<Set<NumericFilterKey>>(new Set())
@@ -248,18 +247,19 @@ export default function App() {
     fetch('/api/stocks')
       .then(async (response) => {
         if (!response.ok) throw new Error('Market API unavailable')
-        return response.json() as Promise<{ stocks: Stock[]; source: string }>
+        return response.json() as Promise<{ stocks: Stock[]; source: string; stale?: boolean }>
       })
       .then((payload) => {
         if (!active || !payload.stocks?.length) return
         setMarketStocks(payload.stocks)
         setSourceLabel(payload.source)
-        setDataSource('live')
+        setDataSource(payload.stale ? 'cached' : 'live')
       })
       .catch(() => {
         if (!active) return
-        setSourceLabel('Sample fallback')
-        setDataSource('sample')
+        setMarketStocks([])
+        setSourceLabel('Live data unavailable')
+        setDataSource('error')
       })
     return () => { active = false }
   }, [])
@@ -284,7 +284,7 @@ export default function App() {
   const activeFilterCount = activeNumericFilters.size + [filters.sector !== defaultFilters.sector, filters.marketCap !== defaultFilters.marketCap, filters.insiderOnly].filter(Boolean).length
 
   const quoteTargets = useMemo(() => {
-    if (dataSource !== 'live') return []
+    if (dataSource !== 'live' && dataSource !== 'cached') return []
     if (selectedStock) return [selectedStock.ticker]
     if (view === 'watchlist') return watchlist
     if (view === 'screener') return pagedResults.items.map(({ stock }) => stock.ticker)
@@ -332,15 +332,17 @@ export default function App() {
     <TopBar view={view} setView={setView}/>
     <main className="dashboard">
       {view === 'screener' && <>
-        <section className="page-title"><div><span className="eyebrow">Equity research workspace</span><h1>Find signal in the market.</h1><p>Screen the universe, rank what matters, and investigate the strongest ideas.</p></div><div className={`as-of ${dataSource}`}><span><i/> {dataSource === 'live' ? 'Full US universe' : 'Market data'}</span><strong>{sourceLabel}</strong><small>{dataSource === 'loading' ? 'Loading listed equities' : dataSource === 'live' ? `${marketStocks.length.toLocaleString()} companies loaded` : 'Add an API key for full coverage'}</small></div></section>
+        <section className="page-title"><div><span className="eyebrow">Equity research workspace</span><h1>Find signal in the market.</h1><p>Screen the universe, rank what matters, and investigate the strongest ideas.</p></div><div className={`as-of ${dataSource}`}><span><i/> {dataSource === 'live' ? 'Full US universe' : dataSource === 'cached' ? 'Cached US universe' : 'Market data'}</span><strong>{sourceLabel}</strong><small>{dataSource === 'loading' ? 'Loading listed equities' : dataSource === 'live' ? `${marketStocks.length.toLocaleString()} companies loaded` : dataSource === 'cached' ? `${marketStocks.length.toLocaleString()} companies · last known snapshot` : 'Provider unavailable; no demo prices shown'}</small></div></section>
         <section className="toolbar card"><div className="search-box"><Search size={18}/><input aria-label="Search companies" placeholder="Enter exact ticker (e.g. AAPL)" value={filters.search} onChange={(event) => patchFilter('search', event.target.value)}/><kbd>⌘ K</kbd></div><button className={`filter-button ${filterOpen ? 'active' : ''}`} onClick={() => setFilterOpen(!filterOpen)}><SlidersHorizontal size={17}/> Filters {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button><div className="toolbar-divider"/><span className="result-count"><strong>{ranked.length}</strong> companies</span></section>
         {filterOpen && <section className="filter-panel card">
           <div className="filter-panel-head"><div><ListFilter size={17}/><strong>Refine universe</strong></div><button onClick={resetFilters}>Reset all</button></div>
           <div className="filter-grid"><label className="select-field"><span>Sector</span><div><select value={filters.sector} onChange={(event) => patchFilter('sector', event.target.value)}>{availableSectors.map((sector) => <option key={sector}>{sector}</option>)}</select><ChevronDown size={14}/></div></label><label className="select-field"><span>Market cap</span><div><select value={filters.marketCap} onChange={(event) => patchFilter('marketCap', event.target.value as Filters['marketCap'])}><option value="all">Any size</option><option value="mega">Mega cap ($200B+)</option><option value="large">Large cap ($10–200B)</option><option value="mid">Mid cap ($2–10B)</option><option value="small">Small cap (&lt;$2B)</option></select><ChevronDown size={14}/></div></label><SliderField label="Min. revenue growth" value={filters.minRevenueGrowth} min={-10} max={60} step={1} suffix="%" onChange={(value) => patchFilter('minRevenueGrowth', value)}/><SliderField label="Min. earnings growth" value={filters.minEarningsGrowth} min={-20} max={80} step={1} suffix="%" onChange={(value) => patchFilter('minEarningsGrowth', value)}/><SliderField label="Min. FCF growth" value={filters.minFcfGrowth} min={-20} max={60} step={1} suffix="%" onChange={(value) => patchFilter('minFcfGrowth', value)}/><SliderField label="Min. gross margin" value={filters.minGrossMargin} min={0} max={90} step={1} suffix="%" onChange={(value) => patchFilter('minGrossMargin', value)}/><SliderField label="Max. P/E ratio" value={filters.maxPe} min={5} max={80} step={1} suffix="×" onChange={(value) => patchFilter('maxPe', value)}/><SliderField label="Max. P/S ratio" value={filters.maxPs} min={1} max={30} step={1} suffix="×" onChange={(value) => patchFilter('maxPs', value)}/></div>
-          <div className="priority-row"><div><span>Score priorities</span><small>Ratings adapt to what matters to you</small></div><div className="priority-chips">{metricOptions.map(({ key, label }) => <button className={priorities.includes(key) ? 'selected' : ''} onClick={() => togglePriority(key)} key={key}>{priorities.includes(key) && <Check size={12}/>} {label}</button>)}</div><label className="toggle" title={dataSource === 'live' ? 'The current screener feed does not include insider transactions yet.' : undefined}><input type="checkbox" disabled={dataSource === 'live'} checked={filters.insiderOnly} onChange={(event) => patchFilter('insiderOnly', event.target.checked)}/><span/><em>{dataSource === 'live' ? 'Insider data not connected' : 'Insider buying only'}</em></label></div>
+          <div className="priority-row"><div><span>Score priorities</span><small>Ratings adapt to what matters to you</small></div><div className="priority-chips">{metricOptions.map(({ key, label }) => <button className={priorities.includes(key) ? 'selected' : ''} onClick={() => togglePriority(key)} key={key}>{priorities.includes(key) && <Check size={12}/>} {label}</button>)}</div><label className="toggle" title={dataSource === 'live' || dataSource === 'cached' ? 'The current screener feed does not include insider transactions yet.' : undefined}><input type="checkbox" disabled={dataSource === 'live' || dataSource === 'cached'} checked={filters.insiderOnly} onChange={(event) => patchFilter('insiderOnly', event.target.checked)}/><span/><em>{dataSource === 'live' || dataSource === 'cached' ? 'Insider data not connected' : 'Insider buying only'}</em></label></div>
         </section>}
         <section className="results-header"><div><h2>Ranked companies</h2><p>Click any column heading to change the ranking</p></div><label>Sort by <select value={sort.key} onChange={(event) => setSort({ key: event.target.value as SortKey, direction: 'desc' })}><option value="score">Signal score</option><option value="company">Company</option><option value="price">Price</option><option value="change">1D performance</option><option value="marketCap">Market cap</option><option value="revenueGrowth">Revenue growth</option><option value="fcfGrowth">FCF growth</option><option value="grossMargin">Gross margin</option><option value="pe">P/E</option></select></label></section>
-        <StockTable ranked={displayedPage} watchlist={watchlist} sort={sort} onSort={changeSort} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>
+        {dataSource === 'error'
+          ? <div className="empty card"><Filter size={28}/><h3>Market data is temporarily unavailable</h3><p>The live provider could not return verified stocks or prices. Try again after its API allowance resets.</p></div>
+          : <StockTable ranked={displayedPage} watchlist={watchlist} sort={sort} onSort={changeSort} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>}
         {ranked.length > 0 && <Pagination page={pagedResults.page} pageCount={pagedResults.pageCount} total={pagedResults.total} onPage={setPage}/>} 
       </>}
       {view === 'ideas' && <Ideas universe={quotedUniverse} priorities={priorities} onOpen={setSelectedStock}/>}
