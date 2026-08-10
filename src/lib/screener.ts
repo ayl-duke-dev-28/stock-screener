@@ -48,7 +48,7 @@ const fitsMarketCap = (value: number, filter: Filters['marketCap']) => {
 export function filterStocks(stocks: Stock[], filters: Filters): Stock[] {
   const query = filters.search.trim().toLowerCase()
   return stocks.filter((stock) =>
-    (!query || stock.ticker.toLowerCase().includes(query) || stock.name.toLowerCase().includes(query)) &&
+    (!query || stock.ticker.toLowerCase() === query) &&
     (filters.sector === 'All sectors' || stock.sector === filters.sector) &&
     fitsMarketCap(stock.marketCap, filters.marketCap) &&
     stock.revenueGrowth >= filters.minRevenueGrowth &&
