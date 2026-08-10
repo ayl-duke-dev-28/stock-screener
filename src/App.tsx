@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, BarChart3, Bell,
+  ArrowDown, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BarChart3, Bell,
   Bookmark, BookmarkCheck, Check, ChevronDown, CircleHelp, Filter, Lightbulb,
   ListFilter, Search, SlidersHorizontal, Sparkles, TrendingUp, X,
 } from 'lucide-react'
@@ -17,10 +17,25 @@ const defaultFilters: Filters = {
 
 type NumericFilterKey = 'minRevenueGrowth' | 'minEarningsGrowth' | 'minFcfGrowth' | 'minGrossMargin' | 'maxPe' | 'maxPs'
 type Quote = Pick<Stock, 'ticker' | 'price' | 'change' | 'sparkline'>
+type SortKey = 'company' | 'price' | 'marketCap' | 'revenueGrowth' | 'fcfGrowth' | 'grossMargin' | 'pe' | 'score'
+type SortDirection = 'asc' | 'desc'
+type SortState = { key: SortKey; direction: SortDirection }
 
 const numericFilterKeys = new Set<keyof Filters>([
   'minRevenueGrowth', 'minEarningsGrowth', 'minFcfGrowth', 'minGrossMargin', 'maxPe', 'maxPs',
 ])
+
+const sortRecommendations = (recommendations: ReturnType<typeof getRecommendations>, sort: SortState) => {
+  const direction = sort.direction === 'asc' ? 1 : -1
+  return [...recommendations].sort((a, b) => {
+    const comparison = sort.key === 'company'
+      ? a.stock.ticker.localeCompare(b.stock.ticker)
+      : sort.key === 'score'
+        ? a.score - b.score
+        : a.stock[sort.key] - b.stock[sort.key]
+    return (comparison || a.stock.ticker.localeCompare(b.stock.ticker)) * direction
+  })
+}
 
 const metricOptions: { key: MetricKey; label: string }[] = [
   { key: 'revenueGrowth', label: 'Revenue growth' },
@@ -111,7 +126,7 @@ export default function App() {
   const [filterOpen, setFilterOpen] = useState(true)
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
   const [watchlist, setWatchlist] = useState<string[]>(['MSFT', 'UBER'])
-  const [sort, setSort] = useState<'score' | 'marketCap' | 'revenueGrowth'>('score')
+  const [sort, setSort] = useState<SortState>({ key: 'score', direction: 'desc' })
   const [marketStocks, setMarketStocks] = useState<Stock[]>(sampleStocks)
   const [dataSource, setDataSource] = useState<'loading' | 'live' | 'sample'>('loading')
   const [sourceLabel, setSourceLabel] = useState('Connecting…')
@@ -154,9 +169,7 @@ export default function App() {
   const filtered = useMemo(() => filterStocks(marketStocks, appliedFilters), [marketStocks, appliedFilters])
   const ranked = useMemo(() => {
     const recommendations = getRecommendations(filtered, priorities)
-    if (sort === 'marketCap') return [...recommendations].sort((a, b) => b.stock.marketCap - a.stock.marketCap)
-    if (sort === 'revenueGrowth') return [...recommendations].sort((a, b) => b.stock.revenueGrowth - a.stock.revenueGrowth)
-    return recommendations
+    return sortRecommendations(recommendations, sort)
   }, [filtered, priorities, sort])
   const pagedResults = useMemo(() => paginate(ranked, page, 50), [ranked, page])
   useEffect(() => setPage(1), [filters, priorities, sort])
@@ -198,6 +211,10 @@ export default function App() {
     setFilters(defaultFilters)
     setActiveNumericFilters(new Set())
   }
+  const changeSort = (key: SortKey) => setSort((current) => ({
+    key,
+    direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc',
+  }))
   const togglePriority = (key: MetricKey) => setPriorities((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
   const toggleWatchlist = (ticker: string) => setWatchlist((current) => current.includes(ticker) ? current.filter((item) => item !== ticker) : [...current, ticker])
 
@@ -214,12 +231,12 @@ export default function App() {
           <div className="filter-grid"><label className="select-field"><span>Sector</span><div><select value={filters.sector} onChange={(event) => patchFilter('sector', event.target.value)}>{availableSectors.map((sector) => <option key={sector}>{sector}</option>)}</select><ChevronDown size={14}/></div></label><label className="select-field"><span>Market cap</span><div><select value={filters.marketCap} onChange={(event) => patchFilter('marketCap', event.target.value as Filters['marketCap'])}><option value="all">Any size</option><option value="mega">Mega cap ($200B+)</option><option value="large">Large cap ($10–200B)</option><option value="mid">Mid cap ($2–10B)</option><option value="small">Small cap (&lt;$2B)</option></select><ChevronDown size={14}/></div></label><SliderField label="Min. revenue growth" value={filters.minRevenueGrowth} min={-10} max={60} step={1} suffix="%" onChange={(value) => patchFilter('minRevenueGrowth', value)}/><SliderField label="Min. earnings growth" value={filters.minEarningsGrowth} min={-20} max={80} step={1} suffix="%" onChange={(value) => patchFilter('minEarningsGrowth', value)}/><SliderField label="Min. FCF growth" value={filters.minFcfGrowth} min={-20} max={60} step={1} suffix="%" onChange={(value) => patchFilter('minFcfGrowth', value)}/><SliderField label="Min. gross margin" value={filters.minGrossMargin} min={0} max={90} step={1} suffix="%" onChange={(value) => patchFilter('minGrossMargin', value)}/><SliderField label="Max. P/E ratio" value={filters.maxPe} min={5} max={80} step={1} suffix="×" onChange={(value) => patchFilter('maxPe', value)}/><SliderField label="Max. P/S ratio" value={filters.maxPs} min={1} max={30} step={1} suffix="×" onChange={(value) => patchFilter('maxPs', value)}/></div>
           <div className="priority-row"><div><span>Score priorities</span><small>Ratings adapt to what matters to you</small></div><div className="priority-chips">{metricOptions.map(({ key, label }) => <button className={priorities.includes(key) ? 'selected' : ''} onClick={() => togglePriority(key)} key={key}>{priorities.includes(key) && <Check size={12}/>} {label}</button>)}</div><label className="toggle"><input type="checkbox" checked={filters.insiderOnly} onChange={(event) => patchFilter('insiderOnly', event.target.checked)}/><span/><em>Insider buying only</em></label></div>
         </section>}
-        <section className="results-header"><div><h2>Ranked companies</h2><p>Scored against your selected priorities</p></div><label>Sort by <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="score">Signal score</option><option value="marketCap">Market cap</option><option value="revenueGrowth">Revenue growth</option></select></label></section>
-        <StockTable ranked={displayedPage} watchlist={watchlist} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>
+        <section className="results-header"><div><h2>Ranked companies</h2><p>Click any column heading to change the ranking</p></div><label>Sort by <select value={sort.key} onChange={(event) => setSort({ key: event.target.value as SortKey, direction: 'desc' })}><option value="score">Signal score</option><option value="company">Company</option><option value="price">Price</option><option value="marketCap">Market cap</option><option value="revenueGrowth">Revenue growth</option><option value="fcfGrowth">FCF growth</option><option value="grossMargin">Gross margin</option><option value="pe">P/E</option></select></label></section>
+        <StockTable ranked={displayedPage} watchlist={watchlist} sort={sort} onSort={changeSort} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>
         {ranked.length > 0 && <Pagination page={pagedResults.page} pageCount={pagedResults.pageCount} total={pagedResults.total} onPage={setPage}/>} 
       </>}
       {view === 'ideas' && <Ideas universe={quotedUniverse} priorities={priorities} onOpen={setSelectedStock}/>}
-      {view === 'watchlist' && <Watchlist universe={quotedUniverse} tickers={watchlist} priorities={priorities} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>}
+      {view === 'watchlist' && <Watchlist universe={quotedUniverse} tickers={watchlist} priorities={priorities} sort={sort} onSort={changeSort} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>}
     </main>
   </div>
 }
@@ -232,9 +249,19 @@ function TopBar({ view, setView }: { view: string; setView: (view: 'screener' | 
   return <header className="topbar"><button className="brand" onClick={() => setView('screener')}><span><TrendingUp/></span>SIGNAL</button><nav><button className={view === 'screener' ? 'active' : ''} onClick={() => setView('screener')}>Screener</button><button className={view === 'ideas' ? 'active' : ''} onClick={() => setView('ideas')}>Ideas <small>NEW</small></button><button className={view === 'watchlist' ? 'active' : ''} onClick={() => setView('watchlist')}>Watchlist</button></nav><div className="top-actions"><button aria-label="Notifications"><Bell size={18}/><i/></button><div className="avatar">AL</div></div></header>
 }
 
-function StockTable({ ranked, watchlist, onOpen, onToggleSave }: { ranked: ReturnType<typeof getRecommendations>; watchlist: string[]; onOpen: (stock: Stock) => void; onToggleSave: (ticker: string) => void }) {
+function StockTable({ ranked, watchlist, sort, onSort, onOpen, onToggleSave }: { ranked: ReturnType<typeof getRecommendations>; watchlist: string[]; sort: SortState; onSort: (key: SortKey) => void; onOpen: (stock: Stock) => void; onToggleSave: (ticker: string) => void }) {
   if (!ranked.length) return <div className="empty card"><Filter size={28}/><h3>No companies match this screen</h3><p>Try widening one or two filters to bring more of the market back into view.</p></div>
-  return <section className="table-card card"><div className="stock-table table-head"><span>Company</span><span>Price / trend</span><span>Market cap</span><span>Revenue</span><span>FCF growth</span><span>Gross margin</span><span>P/E</span><span>Signal</span><span/></div>{ranked.map(({ stock, score }) => <button className="stock-table table-row" key={stock.ticker} onClick={() => onOpen(stock)}><span className="company-cell"><i className="company-logo">{stock.ticker[0]}</i><span><strong>{stock.ticker}</strong><small>{stock.name}</small></span></span><span className="price-cell"><span><strong>${stock.price.toFixed(2)}</strong><small className={stock.change >= 0 ? 'positive' : 'negative'}>{stock.change >= 0 ? <ArrowUpRight/> : <ArrowDownRight/>}{Math.abs(stock.change).toFixed(2)}%</small></span><Sparkline values={stock.sparkline} positive={stock.change >= 0}/></span><span>{formatMarketCap(stock.marketCap)}</span><span className={stock.revenueGrowth >= 15 ? 'metric-good' : ''}>{stock.revenueGrowth.toFixed(1)}%</span><span className={stock.fcfGrowth >= 15 ? 'metric-good' : ''}>{stock.fcfGrowth.toFixed(1)}%</span><span>{stock.grossMargin.toFixed(1)}%</span><span>{stock.pe.toFixed(1)}×</span><span className="signal-cell"><ScoreBadge score={score}/><span><strong>{scoreToLabel(score)}</strong><small>of 100</small></span></span><span className="row-actions"><i onClick={(event) => { event.stopPropagation(); onToggleSave(stock.ticker) }}>{watchlist.includes(stock.ticker) ? <BookmarkCheck/> : <Bookmark/>}</i><ArrowRight/></span></button>)}</section>
+  const columns: { key: SortKey; label: string; accessibleLabel: string }[] = [
+    { key: 'company', label: 'Company', accessibleLabel: 'Company' },
+    { key: 'price', label: 'Price / trend', accessibleLabel: 'Price' },
+    { key: 'marketCap', label: 'Market cap', accessibleLabel: 'Market cap' },
+    { key: 'revenueGrowth', label: 'Revenue', accessibleLabel: 'Revenue growth' },
+    { key: 'fcfGrowth', label: 'FCF growth', accessibleLabel: 'FCF growth' },
+    { key: 'grossMargin', label: 'Gross margin', accessibleLabel: 'Gross margin' },
+    { key: 'pe', label: 'P/E', accessibleLabel: 'P/E' },
+    { key: 'score', label: 'Signal', accessibleLabel: 'Signal' },
+  ]
+  return <section className="table-card card"><div className="stock-table table-head">{columns.map((column) => { const active = sort.key === column.key; return <button type="button" aria-label={`Sort by ${column.accessibleLabel}`} className={active ? 'active' : ''} data-direction={active ? sort.direction : undefined} onClick={() => onSort(column.key)} key={column.key}><span>{column.label}</span>{active && (sort.direction === 'desc' ? <ArrowDown/> : <ArrowUp/>)}</button> })}<span/></div>{ranked.map(({ stock, score }) => <button className="stock-table table-row" key={stock.ticker} onClick={() => onOpen(stock)}><span className="company-cell"><i className="company-logo">{stock.ticker[0]}</i><span><strong>{stock.ticker}</strong><small>{stock.name}</small></span></span><span className="price-cell"><span><strong>${stock.price.toFixed(2)}</strong><small className={stock.change >= 0 ? 'positive' : 'negative'}>{stock.change >= 0 ? <ArrowUpRight/> : <ArrowDownRight/>}{Math.abs(stock.change).toFixed(2)}%</small></span><Sparkline values={stock.sparkline} positive={stock.change >= 0}/></span><span>{formatMarketCap(stock.marketCap)}</span><span className={stock.revenueGrowth >= 15 ? 'metric-good' : ''}>{stock.revenueGrowth.toFixed(1)}%</span><span className={stock.fcfGrowth >= 15 ? 'metric-good' : ''}>{stock.fcfGrowth.toFixed(1)}%</span><span>{stock.grossMargin.toFixed(1)}%</span><span>{stock.pe.toFixed(1)}×</span><span className="signal-cell"><ScoreBadge score={score}/><span><strong>{scoreToLabel(score)}</strong><small>of 100</small></span></span><span className="row-actions"><i onClick={(event) => { event.stopPropagation(); onToggleSave(stock.ticker) }}>{watchlist.includes(stock.ticker) ? <BookmarkCheck/> : <Bookmark/>}</i><ArrowRight/></span></button>)}</section>
 }
 
 function Ideas({ universe, priorities, onOpen }: { universe: Stock[]; priorities: MetricKey[]; onOpen: (stock: Stock) => void }) {
@@ -247,7 +274,7 @@ function Ideas({ universe, priorities, onOpen }: { universe: Stock[]; priorities
   return <><section className="ideas-hero"><div><span className="eyebrow"><Sparkles size={14}/> Signal ideas</span><h1>A sharper place to start.</h1><p>Curated research themes built from fundamental signals—not hype.</p></div><div className="idea-feature card"><span>Highest conviction today</span><div><div className="company-logo">{top.stock.ticker[0]}</div><div><strong>{top.stock.ticker}</strong><small>{top.stock.name}</small></div><ScoreBadge score={top.score}/><button onClick={() => onOpen(top.stock)}>View thesis <ArrowRight/></button></div></div></section><section className="theme-grid">{themes.map((theme) => <article className={`theme-card card ${theme.color}`} key={theme.title}><span className="theme-tag">{theme.tag}</span><h2>{theme.title}</h2><p>{theme.copy}</p><div className="theme-picks">{theme.picks.map((pick) => <button key={pick.stock.ticker} onClick={() => onOpen(pick.stock)}><span><i className="company-logo">{pick.stock.ticker[0]}</i><span><strong>{pick.stock.ticker}</strong><small>{pick.reason}</small></span></span><span><ScoreBadge score={pick.score}/><ArrowRight/></span></button>)}</div></article>)}</section></>
 }
 
-function Watchlist({ universe, tickers, priorities, onOpen, onToggleSave }: { universe: Stock[]; tickers: string[]; priorities: MetricKey[]; onOpen: (stock: Stock) => void; onToggleSave: (ticker: string) => void }) {
-  const ranked = getRecommendations(universe.filter((stock) => tickers.includes(stock.ticker)), priorities)
-  return <><section className="simple-hero"><span className="eyebrow"><Bookmark size={14}/> Saved research</span><h1>Your watchlist.</h1><p>Keep the companies worth another look in one focused view.</p></section><StockTable ranked={ranked} watchlist={tickers} onOpen={onOpen} onToggleSave={onToggleSave}/></>
+function Watchlist({ universe, tickers, priorities, sort, onSort, onOpen, onToggleSave }: { universe: Stock[]; tickers: string[]; priorities: MetricKey[]; sort: SortState; onSort: (key: SortKey) => void; onOpen: (stock: Stock) => void; onToggleSave: (ticker: string) => void }) {
+  const ranked = sortRecommendations(getRecommendations(universe.filter((stock) => tickers.includes(stock.ticker)), priorities), sort)
+  return <><section className="simple-hero"><span className="eyebrow"><Bookmark size={14}/> Saved research</span><h1>Your watchlist.</h1><p>Keep the companies worth another look in one focused view.</p></section><StockTable ranked={ranked} watchlist={tickers} sort={sort} onSort={onSort} onOpen={onOpen} onToggleSave={onToggleSave}/></>
 }

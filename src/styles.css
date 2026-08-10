@@ -73,6 +73,10 @@ button { color: inherit; }
 .pagination button:disabled { opacity: .35; cursor: not-allowed; }
 .stock-table { display: grid; grid-template-columns: 1.65fr 1.45fr .8fr .75fr .78fr .82fr .55fr 1fr 42px; align-items: center; column-gap: 16px; padding: 0 20px; }
 .table-head { height: 43px; background: #f9faf7; border-bottom: 1px solid #e8eae5; text-transform: uppercase; letter-spacing: .065em; font-size: 8px; color: #8a938f; }
+.table-head > button { border: 0; background: transparent; padding: 0; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; display: flex; align-items: center; gap: 4px; text-align: left; }
+.table-head > button:hover, .table-head > button.active { color: var(--green); }
+.table-head > button:focus-visible { outline: 2px solid #9ac7b4; outline-offset: 3px; border-radius: 3px; }
+.table-head > button svg { width: 11px; height: 11px; stroke-width: 2.5; }
 .table-row { width: 100%; min-height: 72px; border: 0; border-bottom: 1px solid #eceeea; background: transparent; text-align: left; font-size: 11px; cursor: pointer; transition: .2s; }
 .table-row:last-child { border-bottom: 0; }.table-row:hover { background: #f6f9f6; transform: translateX(2px); }
 .company-cell, .company-cell > span, .price-cell, .price-cell > span, .signal-cell { display: flex; align-items: center; }.company-cell { gap: 10px; }.company-cell > span, .price-cell > span, .signal-cell > span { flex-direction: column; align-items: flex-start; }.company-cell small, .price-cell small, .signal-cell small, .idea-feature small, .theme-picks small { color: #88918d; font-size: 8px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
