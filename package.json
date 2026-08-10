@@ -4,7 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k -n api,web -c green,cyan \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "tsx watch server/index.ts",
+    "dev:web": "vite",
+    "start": "tsx server/index.ts",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
@@ -12,19 +15,22 @@
   "dependencies": {
     "@vitejs/plugin-react": "latest",
     "lucide-react": "latest",
-    "vite": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "recharts": "latest"
+    "recharts": "latest",
+    "vite": "latest"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "latest",
     "@testing-library/react": "latest",
     "@testing-library/user-event": "latest",
+    "@types/node": "^26.2.0",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitest/coverage-v8": "latest",
+    "concurrently": "^10.0.4",
     "jsdom": "latest",
+    "tsx": "^4.23.11",
     "typescript": "latest",
     "vitest": "latest"
   }

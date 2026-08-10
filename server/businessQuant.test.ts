@@ -51,4 +51,15 @@ describe('Business Quant market adapter', () => {
     expect(String(fetcher.mock.calls[1][0])).toContain('page=1')
     expect(String(fetcher.mock.calls[2][0])).toContain('page=2')
   })
+
+  it('rejects missing credentials before making a provider request', async () => {
+    const fetcher = vi.fn()
+    await expect(fetchUsMarket('  ', fetcher)).rejects.toThrow('BUSINESS_QUANT_API_KEY')
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a safe provider error for unsuccessful responses', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response('unauthorized', { status: 401 }))
+    await expect(fetchUsMarket('invalid', fetcher)).rejects.toThrow('Business Quant request failed (401)')
+  })
 })

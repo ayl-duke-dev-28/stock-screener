@@ -66,6 +66,11 @@ button { color: inherit; }
 .toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }.toggle input { display: none; }.toggle span { width: 30px; height: 17px; background: #d2d7d3; border-radius: 10px; position: relative; }.toggle span:after { content: ''; position: absolute; width: 13px; height: 13px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: .2s; }.toggle input:checked + span { background: var(--green); }.toggle input:checked + span:after { transform: translateX(13px); }.toggle em { font-style: normal; font-size: 9px; color: #69746f; }
 .results-header { display: flex; align-items: flex-end; justify-content: space-between; margin: 32px 2px 13px; }.results-header h2 { font-family: Newsreader, serif; margin: 0; font-size: 24px; font-weight: 600; }.results-header p { font-size: 10px; color: #85908a; margin: 4px 0 0; }.results-header label { font-size: 10px; color: #84908a; }.results-header select { border: 0; background: transparent; font-weight: 700; font-size: 10px; margin-left: 5px; outline: 0; }
 .table-card { overflow: hidden; }
+.pagination { display: flex; justify-content: space-between; align-items: center; padding: 17px 4px; color: #74807a; font-size: 12px; }
+.pagination > div { display: flex; align-items: center; gap: 12px; }
+.pagination strong { min-width: 84px; text-align: center; color: #425049; font-size: 12px; }
+.pagination button { width: 34px; height: 32px; border: 1px solid #d9ded8; border-radius: 8px; display: grid; place-items: center; background: #fafbf8; cursor: pointer; }
+.pagination button:disabled { opacity: .35; cursor: not-allowed; }
 .stock-table { display: grid; grid-template-columns: 1.65fr 1.45fr .8fr .75fr .78fr .82fr .55fr 1fr 42px; align-items: center; column-gap: 16px; padding: 0 20px; }
 .table-head { height: 43px; background: #f9faf7; border-bottom: 1px solid #e8eae5; text-transform: uppercase; letter-spacing: .065em; font-size: 8px; color: #8a938f; }
 .table-row { width: 100%; min-height: 72px; border: 0; border-bottom: 1px solid #eceeea; background: transparent; text-align: left; font-size: 11px; cursor: pointer; transition: .2s; }

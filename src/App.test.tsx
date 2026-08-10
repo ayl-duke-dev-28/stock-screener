@@ -1,11 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach as afterEachVitest, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { stocks } from './data/stocks'
 
 describe('screener criteria controls', () => {
   beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('API not configured'))))
-  afterEachVitest(() => vi.unstubAllGlobals())
+  afterEachVitest(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
 
   it('uses live drag sliders for every numeric investment criterion', () => {
     render(<App />)

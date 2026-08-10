@@ -2,6 +2,25 @@
 
 A polished equity research workspace for screening companies, ranking ideas, and reviewing a transparent 1–100 scorecard.
 
+## Connect the full U.S. stock market
+
+The app integrates with Business Quant's free full-market screener. It covers U.S.-listed stocks across NYSE, Nasdaq, and OTC markets and supplies the fundamental metrics used by this app.
+
+1. Create a free account and API key at [Business Quant](https://businessquant.com).
+2. Create your local environment file:
+
+```bash
+cp .env.example .env
+```
+
+3. Open `.env` and add the key:
+
+```text
+BUSINESS_QUANT_API_KEY=your_actual_key_here
+```
+
+The key is read only by the local API server and is never shipped to the browser. `.env` is ignored by Git and must not be committed.
+
 ## Run locally
 
 ```bash
@@ -9,7 +28,7 @@ npm install
 npm run dev
 ```
 
-Then open `http://localhost:5173`.
+Then open `http://localhost:5173`. The app loads the full universe, caches it for 15 minutes, and renders 50 ranked companies per page. If the key is absent or the provider is unavailable, the sample dataset remains available as a fallback.
 
 ## Included
 
@@ -18,11 +37,12 @@ Then open `http://localhost:5173`.
 - Ranked results with market metrics, trend sparklines, and watchlist actions
 - Curated investment-idea themes with rated recommendations and concise rationales
 - Detailed company scorecards with growth, quality, valuation, and momentum breakdowns
+- Full U.S. equity universe with client-side filtering and 50-row pagination
 - Responsive desktop and mobile layouts
 
 ## Data note
 
-This first product version uses a clearly labeled sample dataset in `src/data/stocks.ts`. The scoring and filtering logic is isolated in `src/lib/screener.ts`, ready to connect to a licensed fundamentals and market-data API in a later iteration.
+The live universe and fundamentals come from Business Quant's SEC-derived screener API. The local dataset in `src/data/stocks.ts` is retained only as an offline/configuration fallback. Price-chart sparklines remain illustrative until a dedicated historical-prices feed is connected.
 
 ## Validation
 

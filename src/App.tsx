@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, BarChart3, Bell,
   Bookmark, BookmarkCheck, Check, ChevronDown, CircleHelp, Filter, Lightbulb,
   ListFilter, Search, SlidersHorizontal, Sparkles, TrendingUp, X,
 } from 'lucide-react'
-import { sectors, stocks } from './data/stocks'
+import { stocks as sampleStocks } from './data/stocks'
 import { filterStocks, getRecommendations, scoreStock, scoreToLabel } from './lib/screener'
+import { paginate } from './lib/pagination'
 import type { Filters, MetricKey, ScoreBreakdown, Stock } from './types'
 
 const defaultFilters: Filters = {
@@ -104,14 +105,42 @@ export default function App() {
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
   const [watchlist, setWatchlist] = useState<string[]>(['MSFT', 'UBER'])
   const [sort, setSort] = useState<'score' | 'marketCap' | 'revenueGrowth'>('score')
+  const [marketStocks, setMarketStocks] = useState<Stock[]>(sampleStocks)
+  const [dataSource, setDataSource] = useState<'loading' | 'live' | 'sample'>('loading')
+  const [sourceLabel, setSourceLabel] = useState('Connecting…')
+  const [page, setPage] = useState(1)
 
-  const filtered = useMemo(() => filterStocks(stocks, filters), [filters])
+  useEffect(() => {
+    let active = true
+    fetch('/api/stocks')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Market API unavailable')
+        return response.json() as Promise<{ stocks: Stock[]; source: string }>
+      })
+      .then((payload) => {
+        if (!active || !payload.stocks?.length) return
+        setMarketStocks(payload.stocks)
+        setSourceLabel(payload.source)
+        setDataSource('live')
+      })
+      .catch(() => {
+        if (!active) return
+        setSourceLabel('Sample fallback')
+        setDataSource('sample')
+      })
+    return () => { active = false }
+  }, [])
+
+  const availableSectors = useMemo(() => ['All sectors', ...Array.from(new Set(marketStocks.map((stock) => stock.sector))).sort()], [marketStocks])
+  const filtered = useMemo(() => filterStocks(marketStocks, filters), [marketStocks, filters])
   const ranked = useMemo(() => {
     const recommendations = getRecommendations(filtered, priorities)
     if (sort === 'marketCap') return [...recommendations].sort((a, b) => b.stock.marketCap - a.stock.marketCap)
     if (sort === 'revenueGrowth') return [...recommendations].sort((a, b) => b.stock.revenueGrowth - a.stock.revenueGrowth)
     return recommendations
   }, [filtered, priorities, sort])
+  const pagedResults = useMemo(() => paginate(ranked, page, 50), [ranked, page])
+  useEffect(() => setPage(1), [filters, priorities, sort])
   const activeFilterCount = [filters.sector !== defaultFilters.sector, filters.marketCap !== defaultFilters.marketCap, filters.minRevenueGrowth !== defaultFilters.minRevenueGrowth, filters.minEarningsGrowth !== defaultFilters.minEarningsGrowth, filters.minFcfGrowth !== defaultFilters.minFcfGrowth, filters.minGrossMargin !== defaultFilters.minGrossMargin, filters.maxPe !== defaultFilters.maxPe, filters.maxPs !== defaultFilters.maxPs, filters.insiderOnly].filter(Boolean).length
 
   const patchFilter = <K extends keyof Filters>(key: K, value: Filters[K]) => setFilters((current) => ({ ...current, [key]: value }))
@@ -124,20 +153,25 @@ export default function App() {
     <TopBar view={view} setView={setView}/>
     <main className="dashboard">
       {view === 'screener' && <>
-        <section className="page-title"><div><span className="eyebrow">Equity research workspace</span><h1>Find signal in the market.</h1><p>Screen the universe, rank what matters, and investigate the strongest ideas.</p></div><div className="as-of"><span><i/> Market data</span><strong>Sample dataset</strong><small>Updated for product preview</small></div></section>
+        <section className="page-title"><div><span className="eyebrow">Equity research workspace</span><h1>Find signal in the market.</h1><p>Screen the universe, rank what matters, and investigate the strongest ideas.</p></div><div className={`as-of ${dataSource}`}><span><i/> {dataSource === 'live' ? 'Full US universe' : 'Market data'}</span><strong>{sourceLabel}</strong><small>{dataSource === 'loading' ? 'Loading listed equities' : dataSource === 'live' ? `${marketStocks.length.toLocaleString()} companies loaded` : 'Add an API key for full coverage'}</small></div></section>
         <section className="toolbar card"><div className="search-box"><Search size={18}/><input aria-label="Search companies" placeholder="Search by company or ticker" value={filters.search} onChange={(event) => patchFilter('search', event.target.value)}/><kbd>⌘ K</kbd></div><button className={`filter-button ${filterOpen ? 'active' : ''}`} onClick={() => setFilterOpen(!filterOpen)}><SlidersHorizontal size={17}/> Filters {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button><div className="toolbar-divider"/><span className="result-count"><strong>{ranked.length}</strong> companies</span></section>
         {filterOpen && <section className="filter-panel card">
           <div className="filter-panel-head"><div><ListFilter size={17}/><strong>Refine universe</strong></div><button onClick={() => setFilters(defaultFilters)}>Reset all</button></div>
-          <div className="filter-grid"><label className="select-field"><span>Sector</span><div><select value={filters.sector} onChange={(event) => patchFilter('sector', event.target.value)}>{sectors.map((sector) => <option key={sector}>{sector}</option>)}</select><ChevronDown size={14}/></div></label><label className="select-field"><span>Market cap</span><div><select value={filters.marketCap} onChange={(event) => patchFilter('marketCap', event.target.value as Filters['marketCap'])}><option value="all">Any size</option><option value="mega">Mega cap ($200B+)</option><option value="large">Large cap ($10–200B)</option><option value="mid">Mid cap ($2–10B)</option><option value="small">Small cap (&lt;$2B)</option></select><ChevronDown size={14}/></div></label><SliderField label="Min. revenue growth" value={filters.minRevenueGrowth} min={-10} max={60} step={1} suffix="%" onChange={(value) => patchFilter('minRevenueGrowth', value)}/><SliderField label="Min. earnings growth" value={filters.minEarningsGrowth} min={-20} max={80} step={1} suffix="%" onChange={(value) => patchFilter('minEarningsGrowth', value)}/><SliderField label="Min. FCF growth" value={filters.minFcfGrowth} min={-20} max={60} step={1} suffix="%" onChange={(value) => patchFilter('minFcfGrowth', value)}/><SliderField label="Min. gross margin" value={filters.minGrossMargin} min={0} max={90} step={1} suffix="%" onChange={(value) => patchFilter('minGrossMargin', value)}/><SliderField label="Max. P/E ratio" value={filters.maxPe} min={5} max={80} step={1} suffix="×" onChange={(value) => patchFilter('maxPe', value)}/><SliderField label="Max. P/S ratio" value={filters.maxPs} min={1} max={30} step={1} suffix="×" onChange={(value) => patchFilter('maxPs', value)}/></div>
+          <div className="filter-grid"><label className="select-field"><span>Sector</span><div><select value={filters.sector} onChange={(event) => patchFilter('sector', event.target.value)}>{availableSectors.map((sector) => <option key={sector}>{sector}</option>)}</select><ChevronDown size={14}/></div></label><label className="select-field"><span>Market cap</span><div><select value={filters.marketCap} onChange={(event) => patchFilter('marketCap', event.target.value as Filters['marketCap'])}><option value="all">Any size</option><option value="mega">Mega cap ($200B+)</option><option value="large">Large cap ($10–200B)</option><option value="mid">Mid cap ($2–10B)</option><option value="small">Small cap (&lt;$2B)</option></select><ChevronDown size={14}/></div></label><SliderField label="Min. revenue growth" value={filters.minRevenueGrowth} min={-10} max={60} step={1} suffix="%" onChange={(value) => patchFilter('minRevenueGrowth', value)}/><SliderField label="Min. earnings growth" value={filters.minEarningsGrowth} min={-20} max={80} step={1} suffix="%" onChange={(value) => patchFilter('minEarningsGrowth', value)}/><SliderField label="Min. FCF growth" value={filters.minFcfGrowth} min={-20} max={60} step={1} suffix="%" onChange={(value) => patchFilter('minFcfGrowth', value)}/><SliderField label="Min. gross margin" value={filters.minGrossMargin} min={0} max={90} step={1} suffix="%" onChange={(value) => patchFilter('minGrossMargin', value)}/><SliderField label="Max. P/E ratio" value={filters.maxPe} min={5} max={80} step={1} suffix="×" onChange={(value) => patchFilter('maxPe', value)}/><SliderField label="Max. P/S ratio" value={filters.maxPs} min={1} max={30} step={1} suffix="×" onChange={(value) => patchFilter('maxPs', value)}/></div>
           <div className="priority-row"><div><span>Score priorities</span><small>Ratings adapt to what matters to you</small></div><div className="priority-chips">{metricOptions.map(({ key, label }) => <button className={priorities.includes(key) ? 'selected' : ''} onClick={() => togglePriority(key)} key={key}>{priorities.includes(key) && <Check size={12}/>} {label}</button>)}</div><label className="toggle"><input type="checkbox" checked={filters.insiderOnly} onChange={(event) => patchFilter('insiderOnly', event.target.checked)}/><span/><em>Insider buying only</em></label></div>
         </section>}
         <section className="results-header"><div><h2>Ranked companies</h2><p>Scored against your selected priorities</p></div><label>Sort by <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="score">Signal score</option><option value="marketCap">Market cap</option><option value="revenueGrowth">Revenue growth</option></select></label></section>
-        <StockTable ranked={ranked} watchlist={watchlist} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>
+        <StockTable ranked={pagedResults.items} watchlist={watchlist} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>
+        {ranked.length > 0 && <Pagination page={pagedResults.page} pageCount={pagedResults.pageCount} total={pagedResults.total} onPage={setPage}/>} 
       </>}
-      {view === 'ideas' && <Ideas priorities={priorities} onOpen={setSelectedStock}/>} 
-      {view === 'watchlist' && <Watchlist tickers={watchlist} priorities={priorities} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>} 
+      {view === 'ideas' && <Ideas universe={marketStocks} priorities={priorities} onOpen={setSelectedStock}/>} 
+      {view === 'watchlist' && <Watchlist universe={marketStocks} tickers={watchlist} priorities={priorities} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>} 
     </main>
   </div>
+}
+
+function Pagination({ page, pageCount, total, onPage }: { page: number; pageCount: number; total: number; onPage: (page: number) => void }) {
+  return <nav className="pagination" aria-label="Stock results pagination"><span>Showing {(page - 1) * 50 + 1}–{Math.min(page * 50, total)} of {total.toLocaleString()}</span><div><button aria-label="Previous page" disabled={page === 1} onClick={() => onPage(page - 1)}><ArrowLeft size={15}/></button><strong>Page {page} of {pageCount}</strong><button aria-label="Next page" disabled={page === pageCount} onClick={() => onPage(page + 1)}><ArrowRight size={15}/></button></div></nav>
 }
 
 function TopBar({ view, setView }: { view: string; setView: (view: 'screener' | 'ideas' | 'watchlist') => void }) {
@@ -149,17 +183,17 @@ function StockTable({ ranked, watchlist, onOpen, onToggleSave }: { ranked: Retur
   return <section className="table-card card"><div className="stock-table table-head"><span>Company</span><span>Price / trend</span><span>Market cap</span><span>Revenue</span><span>FCF growth</span><span>Gross margin</span><span>P/E</span><span>Signal</span><span/></div>{ranked.map(({ stock, score }) => <button className="stock-table table-row" key={stock.ticker} onClick={() => onOpen(stock)}><span className="company-cell"><i className="company-logo">{stock.ticker[0]}</i><span><strong>{stock.ticker}</strong><small>{stock.name}</small></span></span><span className="price-cell"><span><strong>${stock.price.toFixed(2)}</strong><small className={stock.change >= 0 ? 'positive' : 'negative'}>{stock.change >= 0 ? <ArrowUpRight/> : <ArrowDownRight/>}{Math.abs(stock.change).toFixed(2)}%</small></span><Sparkline values={stock.sparkline} positive={stock.change >= 0}/></span><span>{formatMarketCap(stock.marketCap)}</span><span className={stock.revenueGrowth >= 15 ? 'metric-good' : ''}>{stock.revenueGrowth.toFixed(1)}%</span><span className={stock.fcfGrowth >= 15 ? 'metric-good' : ''}>{stock.fcfGrowth.toFixed(1)}%</span><span>{stock.grossMargin.toFixed(1)}%</span><span>{stock.pe.toFixed(1)}×</span><span className="signal-cell"><ScoreBadge score={score}/><span><strong>{scoreToLabel(score)}</strong><small>of 100</small></span></span><span className="row-actions"><i onClick={(event) => { event.stopPropagation(); onToggleSave(stock.ticker) }}>{watchlist.includes(stock.ticker) ? <BookmarkCheck/> : <Bookmark/>}</i><ArrowRight/></span></button>)}</section>
 }
 
-function Ideas({ priorities, onOpen }: { priorities: MetricKey[]; onOpen: (stock: Stock) => void }) {
+function Ideas({ universe, priorities, onOpen }: { universe: Stock[]; priorities: MetricKey[]; onOpen: (stock: Stock) => void }) {
   const themes = [
-    { title: 'Profitable compounders', tag: 'Quality growth', copy: 'Strong top-line growth, expanding cash generation, and durable margins.', color: 'sage', picks: getRecommendations(stocks.filter((s) => s.revenueGrowth > 15 && s.fcfGrowth > 18), ['revenueGrowth', 'fcfGrowth', 'grossMargin']).slice(0, 3) },
-    { title: 'Growth at a fair price', tag: 'GARP', copy: 'Above-market earnings growth without the most demanding valuation multiples.', color: 'sand', picks: getRecommendations(stocks.filter((s) => s.earningsGrowth > 20 && s.pe < 35), ['earningsGrowth', 'pe', 'ps']).slice(0, 3) },
-    { title: 'Insiders leaning in', tag: 'Smart money', copy: 'Positive insider activity paired with improving fundamental momentum.', color: 'blue', picks: getRecommendations(stocks.filter((s) => s.insiderActivity > 3), ['insiderActivity', 'earningsGrowth']).slice(0, 3) },
+    { title: 'Profitable compounders', tag: 'Quality growth', copy: 'Strong top-line growth, expanding cash generation, and durable margins.', color: 'sage', picks: getRecommendations(universe.filter((s) => s.revenueGrowth > 15 && s.fcfGrowth > 18), ['revenueGrowth', 'fcfGrowth', 'grossMargin']).slice(0, 3) },
+    { title: 'Growth at a fair price', tag: 'GARP', copy: 'Above-market earnings growth without the most demanding valuation multiples.', color: 'sand', picks: getRecommendations(universe.filter((s) => s.earningsGrowth > 20 && s.pe < 35), ['earningsGrowth', 'pe', 'ps']).slice(0, 3) },
+    { title: 'Insiders leaning in', tag: 'Smart money', copy: 'Positive insider activity paired with improving fundamental momentum.', color: 'blue', picks: getRecommendations(universe.filter((s) => s.insiderActivity > 3), ['insiderActivity', 'earningsGrowth']).slice(0, 3) },
   ]
-  const top = getRecommendations(stocks, priorities)[0]
+  const top = getRecommendations(universe, priorities)[0]
   return <><section className="ideas-hero"><div><span className="eyebrow"><Sparkles size={14}/> Signal ideas</span><h1>A sharper place to start.</h1><p>Curated research themes built from fundamental signals—not hype.</p></div><div className="idea-feature card"><span>Highest conviction today</span><div><div className="company-logo">{top.stock.ticker[0]}</div><div><strong>{top.stock.ticker}</strong><small>{top.stock.name}</small></div><ScoreBadge score={top.score}/><button onClick={() => onOpen(top.stock)}>View thesis <ArrowRight/></button></div></div></section><section className="theme-grid">{themes.map((theme) => <article className={`theme-card card ${theme.color}`} key={theme.title}><span className="theme-tag">{theme.tag}</span><h2>{theme.title}</h2><p>{theme.copy}</p><div className="theme-picks">{theme.picks.map((pick) => <button key={pick.stock.ticker} onClick={() => onOpen(pick.stock)}><span><i className="company-logo">{pick.stock.ticker[0]}</i><span><strong>{pick.stock.ticker}</strong><small>{pick.reason}</small></span></span><span><ScoreBadge score={pick.score}/><ArrowRight/></span></button>)}</div></article>)}</section></>
 }
 
-function Watchlist({ tickers, priorities, onOpen, onToggleSave }: { tickers: string[]; priorities: MetricKey[]; onOpen: (stock: Stock) => void; onToggleSave: (ticker: string) => void }) {
-  const ranked = getRecommendations(stocks.filter((stock) => tickers.includes(stock.ticker)), priorities)
+function Watchlist({ universe, tickers, priorities, onOpen, onToggleSave }: { universe: Stock[]; tickers: string[]; priorities: MetricKey[]; onOpen: (stock: Stock) => void; onToggleSave: (ticker: string) => void }) {
+  const ranked = getRecommendations(universe.filter((stock) => tickers.includes(stock.ticker)), priorities)
   return <><section className="simple-hero"><span className="eyebrow"><Bookmark size={14}/> Saved research</span><h1>Your watchlist.</h1><p>Keep the companies worth another look in one focused view.</p></section><StockTable ranked={ranked} watchlist={tickers} onOpen={onOpen} onToggleSave={onToggleSave}/></>
 }
