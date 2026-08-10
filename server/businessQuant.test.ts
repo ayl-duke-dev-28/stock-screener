@@ -135,4 +135,35 @@ describe('Business Quant market adapter', () => {
       expect.objectContaining({ ticker: 'AAPL', price: 205, sparkline: [200, 205] }),
     ])
   })
+
+  it('requests intraday bars for 1D charts and returns dated price points', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      metadata: { ticker: 'AAPL' },
+      data: [
+        { date: '2026-08-07 16:00:00', close: 105 },
+        { date: '2026-08-07 09:30:00', close: 100 },
+      ],
+    })))
+
+    const quotes = await fetchStockQuotes('secret-key', ['AAPL'], fetcher, { range: '1d' })
+
+    expect(String(fetcher.mock.calls[0][0])).toContain('mode=minute-bars')
+    expect(String(fetcher.mock.calls[0][0])).toContain('period=1d')
+    expect(quotes[0].history).toEqual([
+      { date: '2026-08-07 09:30:00', price: 100 },
+      { date: '2026-08-07 16:00:00', price: 105 },
+    ])
+  })
+
+  it('requests the full selected daily chart horizon', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      metadata: { ticker: 'AAPL' }, data: [{ date: '2026-08-07 16:00:00', close: 105 }],
+    })))
+
+    await fetchStockQuotes('secret-key', ['AAPL'], fetcher, { range: '5y' })
+
+    expect(String(fetcher.mock.calls[0][0])).toContain('mode=daily')
+    expect(String(fetcher.mock.calls[0][0])).toContain('period=5y')
+    expect(String(fetcher.mock.calls[0][0])).toContain('limit=1500')
+  })
 })

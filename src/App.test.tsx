@@ -30,7 +30,7 @@ describe('screener criteria controls', () => {
     render(<App />)
     await waitFor(() => expect(screen.getByText('Sample fallback')).toBeInTheDocument())
 
-    const sortableColumns = ['Company', 'Price', 'Market cap', 'Revenue growth', 'FCF growth', 'Gross margin', 'P/E', 'Signal']
+    const sortableColumns = ['Company', 'Price', '1D performance', 'Market cap', 'Revenue growth', 'FCF growth', 'Gross margin', 'P/E', 'Signal']
     sortableColumns.forEach((column) => {
       expect(screen.getByRole('button', { name: `Sort by ${column}` })).toBeInTheDocument()
     })
@@ -102,5 +102,45 @@ describe('screener criteria controls', () => {
     expect(screen.getByText('35.7×')).toBeInTheDocument()
     expect(screen.getByText('N/A')).toBeInTheDocument()
     expect(screen.queryByText(/-999|999\.0/)).not.toBeInTheDocument()
+  })
+
+  it('switches chart ranges and reveals the hovered point price', async () => {
+    const aapl = { ...stocks[0], ticker: 'AAPL', name: 'Apple Inc.' }
+    const historyByRange: Record<string, Array<{ date: string; price: number }>> = {
+      '1y': [{ date: '2025-08-07 16:00:00', price: 80 }, { date: '2026-08-07 16:00:00', price: 105 }],
+      '1m': [
+        { date: '2026-07-07 16:00:00', price: 90 },
+        { date: '2026-07-22 16:00:00', price: 100 },
+        { date: '2026-08-07 16:00:00', price: 110 },
+      ],
+    }
+    const fetcher = vi.fn().mockImplementation((input: string) => {
+      const url = String(input)
+      if (url.startsWith('/api/quotes')) {
+        const range = new URL(url, 'http://localhost').searchParams.get('range') ?? '1y'
+        const history = historyByRange[range] ?? historyByRange['1y']
+        return Promise.resolve(new Response(JSON.stringify({
+          quotes: [{ ticker: 'AAPL', price: history.at(-1)!.price, change: 1.2, sparkline: history.map((point) => point.price), history }],
+        })))
+      }
+      return Promise.resolve(new Response(JSON.stringify({ stocks: [aapl], total: 1, source: 'Business Quant' })))
+    })
+    vi.stubGlobal('fetch', fetcher)
+
+    const { container } = render(<App />)
+    await waitFor(() => expect(container.querySelector('.table-row')).toBeInTheDocument())
+    fireEvent.click(container.querySelector('.table-row')!)
+
+    expect(['1D', '1M', '6M', '1Y', '5Y'].map((range) => screen.getByRole('button', { name: range }))).toHaveLength(5)
+    fireEvent.click(screen.getByRole('button', { name: '1M' }))
+    await waitFor(() => expect(fetcher).toHaveBeenCalledWith(expect.stringContaining('range=1m')))
+    expect(screen.getByRole('button', { name: '1M' })).toHaveClass('active')
+
+    const chart = await screen.findByRole('img', { name: 'Interactive price chart' })
+    vi.spyOn(chart, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, top: 0, right: 640, bottom: 190, left: 0, width: 640, height: 190, toJSON: () => ({}),
+    })
+    fireEvent.mouseMove(chart, { clientX: 320 })
+    expect(screen.getByText('$100.00')).toBeInTheDocument()
   })
 })
