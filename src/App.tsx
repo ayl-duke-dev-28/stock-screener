@@ -11,7 +11,7 @@ import type { Filters, MetricKey, ScoreBreakdown, Stock } from './types'
 const defaultFilters: Filters = {
   search: '', sector: 'All sectors', marketCap: 'all', minRevenueGrowth: 0,
   minEarningsGrowth: 0, minFcfGrowth: 0, minGrossMargin: 0,
-  maxPe: 100, maxPs: 100, insiderOnly: false,
+  maxPe: 80, maxPs: 30, insiderOnly: false,
 }
 
 const metricOptions: { key: MetricKey; label: string }[] = [
@@ -47,8 +47,22 @@ function ScoreBadge({ score, size = 'small' }: { score: number; size?: 'small' |
   return <div className={`score-badge ${size}`} style={{ '--score-color': color } as React.CSSProperties}><span>{score}</span>{size === 'large' && <small>/ 100</small>}</div>
 }
 
-function Field({ label, value, suffix, onChange }: { label: string; value: number; suffix?: string; onChange: (value: number) => void }) {
-  return <label className="filter-field"><span>{label}</span><div><input type="number" value={value} onChange={(event) => onChange(Number(event.target.value))}/>{suffix && <em>{suffix}</em>}</div></label>
+function SliderField({ label, value, min, max, step, suffix, onChange }: { label: string; value: number; min: number; max: number; step: number; suffix: string; onChange: (value: number) => void }) {
+  const progress = ((value - min) / (max - min)) * 100
+  return <label className="slider-field">
+    <span><span>{label}</span><strong>{value}{suffix}</strong></span>
+    <input
+      aria-label={label}
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      style={{ '--slider-progress': `${progress}%` } as React.CSSProperties}
+      onChange={(event) => onChange(Number(event.target.value))}
+    />
+    <small><span>{min}{suffix}</span><span>{max}{suffix}</span></small>
+  </label>
 }
 
 function BreakdownBars({ breakdown }: { breakdown: ScoreBreakdown }) {
@@ -98,7 +112,7 @@ export default function App() {
     if (sort === 'revenueGrowth') return [...recommendations].sort((a, b) => b.stock.revenueGrowth - a.stock.revenueGrowth)
     return recommendations
   }, [filtered, priorities, sort])
-  const activeFilterCount = [filters.sector !== 'All sectors', filters.marketCap !== 'all', filters.minRevenueGrowth > 0, filters.minEarningsGrowth > 0, filters.minFcfGrowth > 0, filters.minGrossMargin > 0, filters.maxPe < 100, filters.maxPs < 100, filters.insiderOnly].filter(Boolean).length
+  const activeFilterCount = [filters.sector !== defaultFilters.sector, filters.marketCap !== defaultFilters.marketCap, filters.minRevenueGrowth !== defaultFilters.minRevenueGrowth, filters.minEarningsGrowth !== defaultFilters.minEarningsGrowth, filters.minFcfGrowth !== defaultFilters.minFcfGrowth, filters.minGrossMargin !== defaultFilters.minGrossMargin, filters.maxPe !== defaultFilters.maxPe, filters.maxPs !== defaultFilters.maxPs, filters.insiderOnly].filter(Boolean).length
 
   const patchFilter = <K extends keyof Filters>(key: K, value: Filters[K]) => setFilters((current) => ({ ...current, [key]: value }))
   const togglePriority = (key: MetricKey) => setPriorities((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
@@ -114,7 +128,7 @@ export default function App() {
         <section className="toolbar card"><div className="search-box"><Search size={18}/><input aria-label="Search companies" placeholder="Search by company or ticker" value={filters.search} onChange={(event) => patchFilter('search', event.target.value)}/><kbd>⌘ K</kbd></div><button className={`filter-button ${filterOpen ? 'active' : ''}`} onClick={() => setFilterOpen(!filterOpen)}><SlidersHorizontal size={17}/> Filters {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button><div className="toolbar-divider"/><span className="result-count"><strong>{ranked.length}</strong> companies</span></section>
         {filterOpen && <section className="filter-panel card">
           <div className="filter-panel-head"><div><ListFilter size={17}/><strong>Refine universe</strong></div><button onClick={() => setFilters(defaultFilters)}>Reset all</button></div>
-          <div className="filter-grid"><label className="select-field"><span>Sector</span><div><select value={filters.sector} onChange={(event) => patchFilter('sector', event.target.value)}>{sectors.map((sector) => <option key={sector}>{sector}</option>)}</select><ChevronDown size={14}/></div></label><label className="select-field"><span>Market cap</span><div><select value={filters.marketCap} onChange={(event) => patchFilter('marketCap', event.target.value as Filters['marketCap'])}><option value="all">Any size</option><option value="mega">Mega cap ($200B+)</option><option value="large">Large cap ($10–200B)</option><option value="mid">Mid cap ($2–10B)</option><option value="small">Small cap (&lt;$2B)</option></select><ChevronDown size={14}/></div></label><Field label="Min. revenue growth" value={filters.minRevenueGrowth} suffix="%" onChange={(value) => patchFilter('minRevenueGrowth', value)}/><Field label="Min. earnings growth" value={filters.minEarningsGrowth} suffix="%" onChange={(value) => patchFilter('minEarningsGrowth', value)}/><Field label="Min. FCF growth" value={filters.minFcfGrowth} suffix="%" onChange={(value) => patchFilter('minFcfGrowth', value)}/><Field label="Min. gross margin" value={filters.minGrossMargin} suffix="%" onChange={(value) => patchFilter('minGrossMargin', value)}/><Field label="Max. P/E ratio" value={filters.maxPe} suffix="×" onChange={(value) => patchFilter('maxPe', value)}/><Field label="Max. P/S ratio" value={filters.maxPs} suffix="×" onChange={(value) => patchFilter('maxPs', value)}/></div>
+          <div className="filter-grid"><label className="select-field"><span>Sector</span><div><select value={filters.sector} onChange={(event) => patchFilter('sector', event.target.value)}>{sectors.map((sector) => <option key={sector}>{sector}</option>)}</select><ChevronDown size={14}/></div></label><label className="select-field"><span>Market cap</span><div><select value={filters.marketCap} onChange={(event) => patchFilter('marketCap', event.target.value as Filters['marketCap'])}><option value="all">Any size</option><option value="mega">Mega cap ($200B+)</option><option value="large">Large cap ($10–200B)</option><option value="mid">Mid cap ($2–10B)</option><option value="small">Small cap (&lt;$2B)</option></select><ChevronDown size={14}/></div></label><SliderField label="Min. revenue growth" value={filters.minRevenueGrowth} min={-10} max={60} step={5} suffix="%" onChange={(value) => patchFilter('minRevenueGrowth', value)}/><SliderField label="Min. earnings growth" value={filters.minEarningsGrowth} min={-20} max={80} step={5} suffix="%" onChange={(value) => patchFilter('minEarningsGrowth', value)}/><SliderField label="Min. FCF growth" value={filters.minFcfGrowth} min={-20} max={60} step={5} suffix="%" onChange={(value) => patchFilter('minFcfGrowth', value)}/><SliderField label="Min. gross margin" value={filters.minGrossMargin} min={0} max={90} step={5} suffix="%" onChange={(value) => patchFilter('minGrossMargin', value)}/><SliderField label="Max. P/E ratio" value={filters.maxPe} min={5} max={80} step={1} suffix="×" onChange={(value) => patchFilter('maxPe', value)}/><SliderField label="Max. P/S ratio" value={filters.maxPs} min={1} max={30} step={1} suffix="×" onChange={(value) => patchFilter('maxPs', value)}/></div>
           <div className="priority-row"><div><span>Score priorities</span><small>Ratings adapt to what matters to you</small></div><div className="priority-chips">{metricOptions.map(({ key, label }) => <button className={priorities.includes(key) ? 'selected' : ''} onClick={() => togglePriority(key)} key={key}>{priorities.includes(key) && <Check size={12}/>} {label}</button>)}</div><label className="toggle"><input type="checkbox" checked={filters.insiderOnly} onChange={(event) => patchFilter('insiderOnly', event.target.checked)}/><span/><em>Insider buying only</em></label></div>
         </section>}
         <section className="results-header"><div><h2>Ranked companies</h2><p>Scored against your selected priorities</p></div><label>Sort by <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="score">Signal score</option><option value="marketCap">Market cap</option><option value="revenueGrowth">Revenue growth</option></select></label></section>
