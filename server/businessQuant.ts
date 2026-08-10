@@ -60,7 +60,7 @@ export function resolveMetrics(metadata: ProviderMetric[]): MetricMap {
     grossMargin: findMetric(metadata, [/^gross margin \(ttm\)$/i, /gross profit margin.*yr/i, /^gross margin/i]),
     pe: findMetric(metadata, [/^price to earnings$/i, /^p\/e ratio$/i, /^price.to.earnings/i]),
     ps: findMetric(metadata, [/^price to sales$/i, /^p\/s ratio$/i, /^price.to.sales/i]),
-    price: findMetric(metadata, [/^stock price$/i, /^current price$/i, /^share price$/i]),
+    price: findMetric(metadata, [/^price$/i, /^stock price$/i, /^current price$/i, /^share price$/i]),
     change: findMetric(metadata, [/price change.*%/i, /1d.*change/i]),
     insiderActivity: findMetric(metadata, [/net insider.*(buy|purchase)/i, /insider.*activity/i]),
   }
