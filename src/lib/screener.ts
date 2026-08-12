@@ -12,7 +12,7 @@ const metricScore = (stock: Stock, metric: MetricKey): number | null => {
     case 'earningsGrowth': return stock.earningsGrowth === null ? null : clamp((stock.earningsGrowth + 10) * 1.65)
     case 'fcfGrowth': return stock.fcfGrowth === null ? null : clamp((stock.fcfGrowth + 10) * 1.7)
     case 'grossMargin': return stock.grossMargin === null ? null : clamp(stock.grossMargin * 1.25)
-    case 'pe': return stock.pe === null ? null : stock.pe <= 0 ? 0 : clamp(115 - stock.pe * 2.25)
+    case 'pe': return stock.pe === null ? null : stock.pe < 1 ? 0 : clamp(115 - stock.pe * 2.25)
     case 'ps': return stock.ps === null ? null : stock.ps <= 0 ? 0 : clamp(105 - stock.ps * 5)
     case 'marketCap': return stock.marketCap === null ? null : clamp(35 + Math.log10(Math.max(stock.marketCap, 1)) * 18)
     case 'insiderActivity': return stock.insiderActivity === null ? null : clamp(50 + stock.insiderActivity * 5)
@@ -88,7 +88,7 @@ export function getRecommendations(stocks: Stock[], priorities: MetricKey[] = []
         ? `Top-tier growth profile with ${stock.revenueGrowth.toFixed(1)}% revenue growth`
         : strongest === 'quality' && stock.grossMargin !== null
           ? `High-quality economics and ${stock.grossMargin.toFixed(1)}% gross margin`
-          : strongest === 'valuation' && stock.pe !== null && stock.pe > 0
+          : strongest === 'valuation' && stock.pe !== null && stock.pe >= 1
             ? `Attractive relative valuation at ${stock.pe.toFixed(1)}× earnings`
             : stock.change !== null
               ? `Positive market signal with ${stock.change.toFixed(1)}% recent momentum`
