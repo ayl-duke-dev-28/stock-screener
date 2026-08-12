@@ -243,6 +243,10 @@ export default function App() {
   const requestedQuotes = useRef(new Set<string>())
 
   useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [selectedStock, view])
+
+  useEffect(() => {
     let active = true
     fetch('/api/stocks')
       .then(async (response) => {
