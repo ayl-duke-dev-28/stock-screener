@@ -376,6 +376,7 @@ function StockTable({ ranked, watchlist, sort, onSort, onOpen, onToggleSave }: {
 }
 
 function Ideas({ universe, priorities, onOpen }: { universe: Stock[]; priorities: MetricKey[]; onOpen: (stock: Stock) => void }) {
+  if (!universe.length) return <section className="simple-hero ideas-empty"><span className="eyebrow"><Sparkles size={14}/> Signal ideas</span><h1>Ideas are temporarily unavailable.</h1><p>Verified market data is required before Signal can rank companies.</p></section>
   const themes = [
     { title: 'Profitable compounders', tag: 'Quality growth', copy: 'Strong top-line growth, expanding cash generation, and durable margins.', color: 'sage', picks: getRecommendations(universe.filter((s) => exceeds(s.revenueGrowth, 15) && exceeds(s.fcfGrowth, 18)), ['revenueGrowth', 'fcfGrowth', 'grossMargin']).slice(0, 3) },
     { title: 'Growth at a fair price', tag: 'GARP', copy: 'Above-market earnings growth without the most demanding valuation multiples.', color: 'sand', picks: getRecommendations(universe.filter((s) => exceeds(s.earningsGrowth, 20) && below(s.pe, 35)), ['earningsGrowth', 'pe', 'ps']).slice(0, 3) },
