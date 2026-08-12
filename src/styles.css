@@ -15,9 +15,13 @@ button { color: inherit; }
 .topbar nav button.active { color: var(--ink); }
 .topbar nav button.active:after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--green); }
 .topbar nav small { font-size: 8px; padding: 2px 4px; border-radius: 4px; background: #dcebe4; color: var(--green); margin-left: 3px; vertical-align: 2px; }
-.top-actions { margin-left: auto; display: flex; align-items: center; gap: 18px; }
-.top-actions > button { border: 0; background: none; position: relative; padding: 8px; color: #66736d; }
-.top-actions > button i { width: 5px; height: 5px; border-radius: 50%; background: #e1745c; position: absolute; top: 6px; right: 6px; }
+.top-actions { margin-left: auto; display: flex; align-items: center; gap: 18px; position: relative; }
+.top-actions > button { border: 0; background: none; position: relative; padding: 8px; color: #66736d; cursor: pointer; }
+.notification-popover { position: absolute; top: 48px; right: 46px; width: 300px; padding: 16px; display: flex; gap: 11px; border: 1px solid var(--line); border-radius: 11px; background: #fffefb; box-shadow: 0 14px 38px rgba(28,43,36,.14); z-index: 40; }
+.notification-popover svg { color: var(--green); flex: none; }
+.notification-popover div { display: flex; flex-direction: column; gap: 3px; }
+.notification-popover strong { font-size: 12px; }
+.notification-popover small { color: var(--muted); font-size: 10px; line-height: 1.45; }
 .avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: #d6ded9; font-size: 11px; font-weight: 700; color: #355448; }
 .dashboard, .detail-page { width: min(1460px, 92vw); margin: 0 auto; padding: 54px 0 80px; }
 .page-title { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 32px; }
