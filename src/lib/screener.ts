@@ -12,14 +12,19 @@ const metricScore = (stock: Stock, metric: MetricKey): number | null => {
     case 'earningsGrowth': return stock.earningsGrowth === null ? null : clamp((stock.earningsGrowth + 10) * 1.65)
     case 'fcfGrowth': return stock.fcfGrowth === null ? null : clamp((stock.fcfGrowth + 10) * 1.7)
     case 'grossMargin': return stock.grossMargin === null ? null : clamp(stock.grossMargin * 1.25)
-    case 'pe': return stock.pe === null ? null : clamp(115 - stock.pe * 2.25)
-    case 'ps': return stock.ps === null ? null : clamp(105 - stock.ps * 5)
+    case 'pe': return stock.pe === null ? null : stock.pe <= 0 ? 0 : clamp(115 - stock.pe * 2.25)
+    case 'ps': return stock.ps === null ? null : stock.ps <= 0 ? 0 : clamp(105 - stock.ps * 5)
     case 'marketCap': return stock.marketCap === null ? null : clamp(35 + Math.log10(Math.max(stock.marketCap, 1)) * 18)
     case 'insiderActivity': return stock.insiderActivity === null ? null : clamp(50 + stock.insiderActivity * 5)
   }
 }
 
 export function scoreStock(stock: Stock, priorities: MetricKey[] = []): ScoreResult {
+  const selectedMetrics: MetricKey[] = priorities.length
+    ? priorities
+    : ['revenueGrowth', 'earningsGrowth', 'fcfGrowth', 'grossMargin', 'pe', 'ps']
+  const selectedScores = selectedMetrics.map((key) => metricScore(stock, key))
+  const coverage = selectedScores.filter((value) => value !== null).length / selectedScores.length
   const breakdown: ScoreBreakdown = {
     growth: Math.round(average([
       metricScore(stock, 'revenueGrowth'), metricScore(stock, 'earningsGrowth'), metricScore(stock, 'fcfGrowth'),
@@ -29,8 +34,10 @@ export function scoreStock(stock: Stock, priorities: MetricKey[] = []): ScoreRes
     momentum: Math.round(average([stock.change === null ? null : clamp(50 + stock.change * 8), metricScore(stock, 'insiderActivity')])),
   }
   const baseScore = breakdown.growth * 0.34 + breakdown.quality * 0.26 + breakdown.valuation * 0.25 + breakdown.momentum * 0.15
-  const priorityScore = priorities.length ? average(priorities.map((key) => metricScore(stock, key))) : baseScore
-  return { score: Math.round(clamp(baseScore * 0.45 + priorityScore * 0.55, 1, 100)), breakdown }
+  const priorityScore = priorities.length ? average(selectedScores) : baseScore
+  const rawScore = clamp(baseScore * 0.45 + priorityScore * 0.55, 1, 100)
+  const confidenceCap = 40 + coverage * 60
+  return { score: Math.round(Math.min(rawScore, confidenceCap)), breakdown }
 }
 
 export function scoreToLabel(score: number): string {
@@ -81,7 +88,7 @@ export function getRecommendations(stocks: Stock[], priorities: MetricKey[] = []
         ? `Top-tier growth profile with ${stock.revenueGrowth.toFixed(1)}% revenue growth`
         : strongest === 'quality' && stock.grossMargin !== null
           ? `High-quality economics and ${stock.grossMargin.toFixed(1)}% gross margin`
-          : strongest === 'valuation' && stock.pe !== null
+          : strongest === 'valuation' && stock.pe !== null && stock.pe > 0
             ? `Attractive relative valuation at ${stock.pe.toFixed(1)}× earnings`
             : stock.change !== null
               ? `Positive market signal with ${stock.change.toFixed(1)}% recent momentum`
