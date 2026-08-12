@@ -115,7 +115,7 @@ export function mapProviderStock(record: ProviderRecord, metrics: MetricMap): St
   const price = getMetric(record, metrics.price)
   const change = getMetric(record, metrics.change)
   const rawMarketCap = getMetric(record, metrics.marketCap)
-  const sector = String(record.sector ?? 'Unclassified')
+  const sector = String(record.sector ?? '').trim() || 'Unclassified'
   return {
     ticker,
     name: String(record.name ?? record.name_short ?? ticker),

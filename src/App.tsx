@@ -269,7 +269,7 @@ export default function App() {
       })
       .then((payload) => {
         if (!active || !payload.stocks?.length) return
-        setMarketStocks(payload.stocks)
+        setMarketStocks(payload.stocks.map((stock) => ({ ...stock, sector: stock.sector.trim() || 'Unclassified' })))
         setSourceLabel(payload.source)
         setDataSource(payload.stale ? 'cached' : 'live')
       })
