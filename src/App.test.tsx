@@ -70,6 +70,47 @@ describe('screener criteria controls', () => {
     expect(screen.queryByText('$182.70')).not.toBeInTheDocument()
   })
 
+  it('leaves the loading state when the market API returns an empty universe', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      stocks: [], total: 0, source: 'Business Quant', updatedAt: new Date().toISOString(),
+    }))))
+
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByText('Live data unavailable')).toBeInTheDocument())
+    expect(screen.queryByText('Connecting…')).not.toBeInTheDocument()
+  })
+
+  it('keeps displayed table prices consistent with the snapshot used for global sorting', async () => {
+    const universe = [
+      { ...stocks[0], ticker: 'LOW', name: 'Low Price', price: 10 },
+      { ...stocks[1], ticker: 'HIGH', name: 'High Price', price: 20 },
+    ]
+    const fetcher = vi.fn().mockImplementation((input: string) => {
+      if (String(input).startsWith('/api/quotes')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          quotes: [
+            { ticker: 'LOW', price: 100, change: 5, sparkline: [90, 100] },
+            { ticker: 'HIGH', price: 1, change: -5, sparkline: [2, 1] },
+          ],
+        })))
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        stocks: universe, total: universe.length, source: 'Business Quant', updatedAt: new Date().toISOString(),
+      })))
+    })
+    vi.stubGlobal('fetch', fetcher)
+
+    const { container } = render(<App />)
+    await waitFor(() => expect(screen.getByText('Business Quant')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Sort by Price' }))
+
+    await waitFor(() => expect(fetcher).toHaveBeenCalledWith(expect.stringContaining('/api/quotes?tickers=')))
+    await waitFor(() => expect(
+      Array.from(container.querySelectorAll('.table-row .table-price strong')).map((node) => node.textContent),
+    ).toEqual(['$20.00', '$10.00']))
+  })
+
   it('loads the full market and paginates large result sets without rendering thousands of rows', async () => {
     const fullMarket = Array.from({ length: 121 }, (_, index) => ({
       ...stocks[index % stocks.length],
