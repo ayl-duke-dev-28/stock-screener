@@ -14,4 +14,12 @@ describe('development API routing', () => {
     const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'))
     expect(packageJson.scripts['dev:web']).toContain('--config vite.config.ts')
   })
+
+  it('measures the provider coordination code in coverage runs', () => {
+    expect(config.test?.coverage?.include).toEqual(expect.arrayContaining([
+      'server/businessQuant.ts',
+      'server/marketData.ts',
+      'src/lib/**/*.ts',
+    ]))
+  })
 })
