@@ -78,6 +78,21 @@ describe('Business Quant market adapter', () => {
     }))
   })
 
+  it('treats blank and formatting-only provider metrics as missing instead of zero', () => {
+    const stock = mapProviderStock({
+      ticker: 'BLANK',
+      'Market Cap': ' ',
+      'Revenue Growth (1y) (TTM)': '%',
+      'Net Income Growth (1y) (TTM)': '$,',
+    }, resolveMetrics(metadata))
+
+    expect(stock).toEqual(expect.objectContaining({
+      marketCap: null,
+      revenueGrowth: null,
+      earningsGrowth: null,
+    }))
+  })
+
   it('fetches every page of the full US equity universe and returns one combined dataset', async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(metadata)))
