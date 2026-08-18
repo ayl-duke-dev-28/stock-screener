@@ -14,7 +14,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
-      include: ['src/lib/**/*.ts', 'server/businessQuant.ts'],
+      include: ['src/lib/**/*.ts', 'server/businessQuant.ts', 'server/marketData.ts'],
       thresholds: { lines: 80, functions: 80, statements: 80, branches: 80 },
     },
   },
