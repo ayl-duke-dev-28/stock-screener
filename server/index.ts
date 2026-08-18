@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, extname, join, resolve } from 'node:path'
 import { loadEnvFile } from 'node:process'
-import { fetchStockQuotes, fetchUsMarket, readMarketSnapshot, writeMarketSnapshot, type MarketPayload, type QuoteRange, type StockQuote } from './businessQuant'
+import { fetchStockQuotes, fetchUsMarket, readMarketSnapshot, writeMarketSnapshot, type QuoteRange } from './businessQuant'
+import { MarketDataCoordinator } from './marketData'
 
 try { loadEnvFile() } catch { /* Production hosts inject environment variables directly. */ }
 
@@ -11,12 +12,16 @@ const port = Number(process.env.PORT || 8787)
 const cacheTtlMs = 15 * 60 * 1000
 const distRoot = resolve(process.cwd(), 'dist')
 const marketSnapshotPath = join(tmpdir(), 'signal-stock-screener', basename(process.cwd()), 'market.json')
-let marketCache: { expiresAt: number; payload: MarketPayload } | null = null
 let marketSnapshotLoaded: Promise<void> | null = null
-let marketRefresh: Promise<MarketPayload> | null = null
-let marketRetryAt = 0
-const quoteCache = new Map<string, { expiresAt: number; quote: StockQuote }>()
 const quoteRanges = new Set<QuoteRange>(['1d', '1m', '6m', '1y', '5y'])
+const marketData = new MarketDataCoordinator({
+  cacheTtlMs,
+  fetchMarket: (apiKey) => fetchUsMarket(apiKey),
+  fetchQuotes: (apiKey, tickers, range) => fetchStockQuotes(apiKey, tickers, fetch, { range }),
+  onMarketRefresh: (payload) => writeMarketSnapshot(marketSnapshotPath, payload).catch((error) => console.error(JSON.stringify({
+    level: 'warn', message: 'Market snapshot persistence failed', detail: error instanceof Error ? error.message : 'Unknown file error',
+  }))),
+})
 
 const json = (response: ServerResponse, status: number, payload: unknown) => {
   response.writeHead(status, {
@@ -28,14 +33,15 @@ const json = (response: ServerResponse, status: number, payload: unknown) => {
 
 async function serveMarket(response: ServerResponse) {
   marketSnapshotLoaded ??= readMarketSnapshot(marketSnapshotPath).then((payload) => {
-    if (payload && !marketCache) marketCache = { payload, expiresAt: 0 }
+    if (payload) marketData.seedMarket(payload)
   })
   await marketSnapshotLoaded
 
   const apiKey = process.env.BUSINESS_QUANT_API_KEY?.trim()
   if (!apiKey) {
-    if (marketCache) {
-      json(response, 200, { ...marketCache.payload, source: `${marketCache.payload.source} (cached)`, stale: true })
+    const cached = marketData.getCachedMarket()
+    if (cached) {
+      json(response, 200, { ...cached, source: `${cached.source} (cached)`, stale: true })
       return
     }
     json(response, 503, {
@@ -45,36 +51,17 @@ async function serveMarket(response: ServerResponse) {
     return
   }
 
-  if (marketCache && marketCache.expiresAt > Date.now()) {
-    json(response, 200, marketCache.payload)
-    return
-  }
-
-  if (marketCache && marketRetryAt > Date.now()) {
-    json(response, 200, { ...marketCache.payload, source: `${marketCache.payload.source} (cached)`, stale: true })
-    return
-  }
-
   try {
-    marketRefresh ??= fetchUsMarket(apiKey).finally(() => { marketRefresh = null })
-    const payload = await marketRefresh
-    marketCache = { payload, expiresAt: Date.now() + cacheTtlMs }
-    marketRetryAt = 0
-    await writeMarketSnapshot(marketSnapshotPath, payload).catch((error) => console.error(JSON.stringify({
-      level: 'warn', message: 'Market snapshot persistence failed', detail: error instanceof Error ? error.message : 'Unknown file error',
-    })))
-    json(response, 200, payload)
+    const result = await marketData.getMarket(apiKey)
+    json(response, 200, result.stale
+      ? { ...result.payload, source: `${result.payload.source} (cached)`, stale: true }
+      : result.payload)
   } catch (error) {
-    marketRetryAt = Date.now() + cacheTtlMs
     console.error(JSON.stringify({
       level: 'error',
       message: 'Full-market refresh failed',
       detail: error instanceof Error ? error.message.replace(apiKey, '[redacted]') : 'Unknown provider error',
     }))
-    if (marketCache) {
-      json(response, 200, { ...marketCache.payload, source: `${marketCache.payload.source} (cached)`, stale: true })
-      return
-    }
     json(response, 502, { error: 'The market-data provider is temporarily unavailable.' })
   }
 }
@@ -98,15 +85,8 @@ async function serveQuotes(tickerQuery: string | null, rangeQuery: string | null
     return
   }
 
-  const now = Date.now()
-  const cacheKey = (ticker: string) => `${range}:${ticker}`
-  const missing = tickers.filter((ticker) => !quoteCache.has(cacheKey(ticker)) || quoteCache.get(cacheKey(ticker))!.expiresAt <= now)
   try {
-    if (missing.length) {
-      const freshQuotes = await fetchStockQuotes(apiKey, missing, fetch, { range })
-      freshQuotes.forEach((quote) => quoteCache.set(cacheKey(quote.ticker), { quote, expiresAt: now + cacheTtlMs }))
-    }
-    const quotes = tickers.flatMap((ticker) => quoteCache.get(cacheKey(ticker))?.quote ?? [])
+    const quotes = await marketData.getQuotes(apiKey, tickers, range)
     json(response, 200, { quotes, source: 'Business Quant', range })
   } catch (error) {
     console.error(JSON.stringify({
