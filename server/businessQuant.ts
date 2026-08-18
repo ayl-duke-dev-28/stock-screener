@@ -103,7 +103,9 @@ export function resolveMetrics(metadata: ProviderMetric[]): MetricMap {
 const numeric = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value !== 'string') return null
-  const parsed = Number(value.replace(/[$,%×,]/g, '').trim())
+  const cleaned = value.replace(/[$,%×,]/g, '').trim()
+  if (!cleaned) return null
+  const parsed = Number(cleaned)
   return Number.isFinite(parsed) ? parsed : null
 }
 
