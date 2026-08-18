@@ -28,7 +28,7 @@ npm install
 npm run dev
 ```
 
-Then open `http://localhost:5173`. The app loads the full universe, caches it for 15 minutes, and renders 50 ranked companies per page. If the key is absent or the provider is unavailable, the sample dataset remains available as a fallback.
+Then open `http://localhost:5173`. The app loads the full universe, caches it for 15 minutes, and renders 50 ranked companies per page. If the provider is temporarily unavailable, the server uses its last valid market snapshot when one exists. Without a key or cached snapshot, the app shows an unavailable state and never substitutes demo prices.
 
 ## Included
 
@@ -42,7 +42,7 @@ Then open `http://localhost:5173`. The app loads the full universe, caches it fo
 
 ## Data note
 
-The live universe and fundamentals come from Business Quant's SEC-derived screener API. The local dataset in `src/data/stocks.ts` is retained only as an offline/configuration fallback. Price-chart sparklines remain illustrative until a dedicated historical-prices feed is connected.
+The live universe and fundamentals come from Business Quant's SEC-derived screener API. The local dataset in `src/data/stocks.ts` is retained for tests and development fixtures only; it is never presented as live fallback data. Business Quant quote history powers table sparklines and the selectable price charts. Ranked table prices, changes, and scores stay on one screener snapshot so global sorting remains internally consistent.
 
 ## Validation
 
