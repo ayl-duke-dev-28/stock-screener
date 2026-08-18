@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { filterStocks, getRecommendations, scoreStock, scoreToLabel } from './lib/screener'
 import { paginate } from './lib/pagination'
+import { QuoteRequestTracker } from './lib/quoteRequests'
 import type { Filters, MetricKey, ScoreBreakdown, Stock } from './types'
 
 const defaultFilters: Filters = {
@@ -240,7 +241,9 @@ export default function App() {
   const [page, setPage] = useState(1)
   const [activeNumericFilters, setActiveNumericFilters] = useState<Set<NumericFilterKey>>(new Set())
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
-  const requestedQuotes = useRef(new Set<string>())
+  const [quoteRetryVersion, setQuoteRetryVersion] = useState(0)
+  const quoteRequests = useRef<QuoteRequestTracker | null>(null)
+  quoteRequests.current ??= new QuoteRequestTracker({ onRetry: () => setQuoteRetryVersion((version) => version + 1) })
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -260,6 +263,8 @@ export default function App() {
     return () => window.removeEventListener('keydown', focusSearch)
   }, [])
 
+  useEffect(() => () => quoteRequests.current?.dispose(), [])
+
   useEffect(() => {
     let active = true
     fetch('/api/stocks')
@@ -268,7 +273,8 @@ export default function App() {
         return response.json() as Promise<{ stocks: Stock[]; source: string; stale?: boolean }>
       })
       .then((payload) => {
-        if (!active || !payload.stocks?.length) return
+        if (!active) return
+        if (!payload.stocks?.length) throw new Error('Market API returned an empty universe')
         setMarketStocks(payload.stocks.map((stock) => ({ ...stock, sector: stock.sector.trim() || 'Unclassified' })))
         setSourceLabel(payload.source)
         setDataSource(payload.stale ? 'cached' : 'live')
@@ -310,23 +316,29 @@ export default function App() {
   }, [dataSource, pagedResults.items, selectedStock, view, watchlist])
 
   useEffect(() => {
-    const pending = quoteTargets.filter((ticker) => !quotes[ticker] && !requestedQuotes.current.has(ticker)).slice(0, 50)
+    const pending = quoteRequests.current!.claim(quoteTargets, (ticker) => Boolean(quotes[ticker]))
     if (!pending.length) return
-    pending.forEach((ticker) => requestedQuotes.current.add(ticker))
     fetch(`/api/quotes?tickers=${encodeURIComponent(pending.join(','))}`)
       .then(async (response) => {
         if (!response.ok) throw new Error('Quote API unavailable')
         return response.json() as Promise<{ quotes: Quote[] }>
       })
-      .then((payload) => setQuotes((current) => ({
-        ...current,
-        ...Object.fromEntries((payload.quotes ?? []).map((quote) => [quote.ticker, quote])),
-      })))
-      .catch(() => pending.forEach((ticker) => requestedQuotes.current.delete(ticker)))
-  }, [quoteTargets, quotes])
+      .then((payload) => {
+        const returnedQuotes = payload.quotes ?? []
+        setQuotes((current) => ({
+          ...current,
+          ...Object.fromEntries(returnedQuotes.map((quote) => [quote.ticker, quote])),
+        }))
+        quoteRequests.current?.complete(pending, returnedQuotes.map((quote) => quote.ticker))
+      })
+      .catch(() => quoteRequests.current?.fail(pending))
+  }, [quoteRetryVersion, quoteTargets, quotes])
 
   const withQuote = (stock: Stock) => quotes[stock.ticker] ? { ...stock, ...quotes[stock.ticker] } : stock
-  const displayedPage = useMemo(() => pagedResults.items.map((result) => ({ ...result, stock: withQuote(result.stock) })), [pagedResults.items, quotes])
+  const withQuoteChart = (stock: Stock) => quotes[stock.ticker]
+    ? { ...stock, sparkline: quotes[stock.ticker].sparkline }
+    : stock
+  const displayedPage = useMemo(() => pagedResults.items.map((result) => ({ ...result, stock: withQuoteChart(result.stock) })), [pagedResults.items, quotes])
   const quotedUniverse = useMemo(() => marketStocks.map(withQuote), [marketStocks, quotes])
 
   const patchFilter = <K extends keyof Filters>(key: K, value: Filters[K]) => {

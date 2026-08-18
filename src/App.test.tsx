@@ -136,8 +136,8 @@ describe('screener criteria controls', () => {
     await waitFor(() => expect(screen.getByText('121', { selector: '.result-count strong' })).toBeInTheDocument())
     expect(container.querySelectorAll('.table-row')).toHaveLength(50)
     expect(screen.getByText('Business Quant')).toBeInTheDocument()
-    await waitFor(() => expect(screen.getAllByText('$123.45')).toHaveLength(50))
     expect(fetcher).toHaveBeenCalledWith(expect.stringContaining('/api/quotes?tickers='))
+    expect(screen.queryByText('$123.45')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
     expect(screen.getByText('Page 2 of 3')).toBeInTheDocument()
