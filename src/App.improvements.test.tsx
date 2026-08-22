@@ -56,6 +56,8 @@ describe('resilient screener workflow', () => {
     await screen.findByText('Test market')
     fireEvent.click(screen.getByRole('button', { name: 'Watchlist' }))
     expect(screen.getByText('Your watchlist is empty')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Browse companies' }))
+    expect(screen.getByRole('heading', { name: 'Ranked companies' })).toBeInTheDocument()
     first.unmount()
 
     localStorage.setItem('signal.preferences.v1', JSON.stringify({ watchlist: [stocks[0].ticker] }))
@@ -179,5 +181,18 @@ describe('resilient screener workflow', () => {
     render(<App />)
 
     expect(await screen.findByText(/cached snapshot from Aug 22, 2026/i)).toBeInTheDocument()
+  })
+
+  it('offers a path back to the screener when ideas have no verified universe', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Unavailable' }), { status: 502 }),
+    ))
+
+    render(<App />)
+    await screen.findByText('Market data is temporarily unavailable')
+    fireEvent.click(screen.getByRole('button', { name: 'Ideas NEW' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Return to screener' }))
+
+    expect(screen.getByText('Market data is temporarily unavailable')).toBeInTheDocument()
   })
 })
