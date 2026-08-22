@@ -61,6 +61,7 @@ describe('scoreStock', () => {
     expect(scoreToLabel(76)).toBe('Strong')
     expect(scoreToLabel(60)).toBe('Balanced')
     expect(scoreToLabel(40)).toBe('Watchlist')
+    expect(scoreToLabel(91, 5 / 6)).toBe('Exceptional · partial data')
   })
 })
 
