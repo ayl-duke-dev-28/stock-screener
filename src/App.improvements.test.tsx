@@ -163,4 +163,21 @@ describe('resilient screener workflow', () => {
     expect(screen.getByRole('button', { name: '1 year price range' })).toHaveAttribute('aria-pressed', 'true')
     expect(await screen.findByRole('alert')).toHaveTextContent('Price history is unavailable')
   })
+
+  it('shows when a cached market snapshot was captured', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: string) => Promise.resolve(
+      String(input).startsWith('/api/quotes')
+        ? new Response(JSON.stringify({ quotes: [] }))
+        : new Response(JSON.stringify({
+          stocks,
+          source: 'Business Quant cache',
+          stale: true,
+          updatedAt: '2026-08-22T18:00:00.000Z',
+        })),
+    )))
+
+    render(<App />)
+
+    expect(await screen.findByText(/cached snapshot from Aug 22, 2026/i)).toBeInTheDocument()
+  })
 })
