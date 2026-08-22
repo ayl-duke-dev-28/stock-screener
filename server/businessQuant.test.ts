@@ -177,6 +177,7 @@ describe('Business Quant market adapter', () => {
     expect(quotes[0].sparkline.at(-1)).toBe(119)
     expect(String(fetcher.mock.calls[0][0])).toContain('ticker=AAPL%2CEMPTY')
     expect(String(fetcher.mock.calls[0][0])).toContain('period=1y')
+    expect(fetcher.mock.calls[0][1]).toEqual(expect.objectContaining({ signal: expect.any(AbortSignal) }))
   })
 
   it('caps quote batches to protect the provider and API allowance', async () => {
@@ -224,5 +225,6 @@ describe('Business Quant market adapter', () => {
     expect(String(fetcher.mock.calls[0][0])).toContain('mode=daily')
     expect(String(fetcher.mock.calls[0][0])).toContain('period=5y')
     expect(String(fetcher.mock.calls[0][0])).toContain('limit=1500')
+    expect(fetcher.mock.calls[0][1]).toEqual(expect.objectContaining({ signal: expect.any(AbortSignal) }))
   })
 })
