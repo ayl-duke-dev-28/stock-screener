@@ -7,21 +7,16 @@ import {
 import { filterStocks, getRecommendations, scoreStock, scoreToLabel } from './lib/screener'
 import { paginate } from './lib/pagination'
 import { QuoteRequestTracker } from './lib/quoteRequests'
+import {
+  defaultFilters, defaultPriorities, defaultSort, loadPreferences, savePreferences,
+  type NumericFilterKey, type SortKey, type SortState,
+} from './lib/preferences'
 import type { Filters, MetricKey, ScoreBreakdown, Stock } from './types'
 
-const defaultFilters: Filters = {
-  search: '', sector: 'All sectors', marketCap: 'all', minRevenueGrowth: 0,
-  minEarningsGrowth: 0, minFcfGrowth: 0, minGrossMargin: 0,
-  maxPe: 80, maxPs: 30, insiderOnly: false,
-}
-
-type NumericFilterKey = 'minRevenueGrowth' | 'minEarningsGrowth' | 'minFcfGrowth' | 'minGrossMargin' | 'maxPe' | 'maxPs'
 type PricePoint = { date: string; price: number }
 type Quote = { ticker: string; price: number; change: number; sparkline: number[]; history?: PricePoint[] }
 type ChartRange = '1d' | '1m' | '6m' | '1y' | '5y'
-type SortKey = 'company' | 'price' | 'change' | 'marketCap' | 'revenueGrowth' | 'fcfGrowth' | 'grossMargin' | 'pe' | 'score'
-type SortDirection = 'asc' | 'desc'
-type SortState = { key: SortKey; direction: SortDirection }
+const resultsPerPage = 25
 
 const numericFilterKeys = new Set<keyof Filters>([
   'minRevenueGrowth', 'minEarningsGrowth', 'minFcfGrowth', 'minGrossMargin', 'maxPe', 'maxPs',
@@ -218,7 +213,7 @@ function StockDetail({ stock, priorities, isSaved, onBack, onToggleSave }: { sto
     </section>
     <section className="detail-grid">
       <div className="chart-card card"><div className="card-heading"><div><span className="eyebrow">Price performance {chartPerformance !== null && <em className={chartPerformance >= 0 ? 'positive' : 'negative'}>{chartPerformance >= 0 ? '+' : ''}{chartPerformance.toFixed(2)}%</em>}</span><h2>{selectedRange.title}</h2></div><div className="range-tabs">{chartRanges.map(({ key, label }) => <button type="button" className={chartRange === key ? 'active' : ''} onClick={() => setChartRange(key)} key={key}>{label}</button>)}</div></div>{chartLoading && !chartHistory.length ? <div className="chart-loading">Loading price history…</div> : <Sparkline values={chartHistory.map(({ price }) => price)} dates={chartHistory.map(({ date }) => date)} range={chartRange} positive={chartPerformance === null || chartPerformance >= 0} large/>}</div>
-      <div className="rating-card card"><span className="eyebrow">Signal rating</span><div className="rating-main"><ScoreBadge score={result.score} size="large"/><div><h2>{scoreToLabel(result.score)}</h2><p>Based on up to {priorities.length || 6} selected criteria with available data</p></div></div><BreakdownBars breakdown={result.breakdown}/></div>
+      <div className="rating-card card"><span className="eyebrow">Signal rating</span><div className="rating-main"><ScoreBadge score={result.score} size="large"/><div><h2>{scoreToLabel(result.score)}</h2><p>{result.coverage.available} of {result.coverage.selected} selected factors reported · {result.coverage.ratio >= .8 ? 'High' : result.coverage.ratio >= .5 ? 'Medium' : 'Low'} data confidence</p></div></div><BreakdownBars breakdown={result.breakdown}/></div>
     </section>
     <section className="analysis-grid">
       <div className="card metric-card"><div className="card-heading"><div><span className="eyebrow">Fundamentals</span><h2>Scorecard</h2></div><span className="live-dot"><i/> Latest reported</span></div><div className="metric-list">{metrics.map(([label, value, good]) => <div key={String(label)}><span>{label}</span><strong>{value}</strong><em className={good ? 'metric-good' : 'metric-neutral'}>{good === null ? 'Not reported' : good ? 'Above benchmark' : 'Within range'}</em></div>)}</div></div>
@@ -228,18 +223,21 @@ function StockDetail({ stock, priorities, isSaved, onBack, onToggleSave }: { sto
 }
 
 export default function App() {
+  const [initialPreferences] = useState(loadPreferences)
   const [view, setView] = useState<'screener' | 'ideas' | 'watchlist'>('screener')
-  const [filters, setFilters] = useState<Filters>(defaultFilters)
-  const [priorities, setPriorities] = useState<MetricKey[]>(['revenueGrowth', 'earningsGrowth', 'fcfGrowth', 'grossMargin', 'pe', 'ps'])
-  const [filterOpen, setFilterOpen] = useState(true)
+  const [filters, setFilters] = useState<Filters>(initialPreferences.filters)
+  const [priorities, setPriorities] = useState<MetricKey[]>(initialPreferences.priorities)
+  const [filterOpen, setFilterOpen] = useState(() => typeof window.matchMedia !== 'function' || !window.matchMedia('(max-width: 760px)').matches)
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null)
-  const [watchlist, setWatchlist] = useState<string[]>(['MSFT', 'UBER'])
-  const [sort, setSort] = useState<SortState>({ key: 'score', direction: 'desc' })
+  const [watchlist, setWatchlist] = useState<string[]>(initialPreferences.watchlist)
+  const [sort, setSort] = useState<SortState>(initialPreferences.sort)
   const [marketStocks, setMarketStocks] = useState<Stock[]>([])
   const [dataSource, setDataSource] = useState<'loading' | 'live' | 'cached' | 'error'>('loading')
   const [sourceLabel, setSourceLabel] = useState('Connecting…')
   const [page, setPage] = useState(1)
-  const [activeNumericFilters, setActiveNumericFilters] = useState<Set<NumericFilterKey>>(new Set())
+  const [activeNumericFilters, setActiveNumericFilters] = useState<Set<NumericFilterKey>>(new Set(initialPreferences.activeNumericFilters))
+  const [marketRetryVersion, setMarketRetryVersion] = useState(0)
+  const [snapshotUpdatedAt, setSnapshotUpdatedAt] = useState<string | null>(null)
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
   const [quoteRetryVersion, setQuoteRetryVersion] = useState(0)
   const quoteRequests = useRef<QuoteRequestTracker | null>(null)
@@ -266,17 +264,24 @@ export default function App() {
   useEffect(() => () => quoteRequests.current?.dispose(), [])
 
   useEffect(() => {
+    savePreferences({ filters, activeNumericFilters: [...activeNumericFilters], priorities, sort, watchlist })
+  }, [activeNumericFilters, filters, priorities, sort, watchlist])
+
+  useEffect(() => {
     let active = true
+    setDataSource('loading')
+    setSourceLabel('Connecting…')
     fetch('/api/stocks')
       .then(async (response) => {
         if (!response.ok) throw new Error('Market API unavailable')
-        return response.json() as Promise<{ stocks: Stock[]; source: string; stale?: boolean }>
+        return response.json() as Promise<{ stocks: Stock[]; source: string; stale?: boolean; updatedAt?: string }>
       })
       .then((payload) => {
         if (!active) return
         if (!payload.stocks?.length) throw new Error('Market API returned an empty universe')
         setMarketStocks(payload.stocks.map((stock) => ({ ...stock, sector: stock.sector.trim() || 'Unclassified' })))
         setSourceLabel(payload.source)
+        setSnapshotUpdatedAt(payload.updatedAt ?? null)
         setDataSource(payload.stale ? 'cached' : 'live')
       })
       .catch(() => {
@@ -286,7 +291,7 @@ export default function App() {
         setDataSource('error')
       })
     return () => { active = false }
-  }, [])
+  }, [marketRetryVersion])
 
   const availableSectors = useMemo(() => ['All sectors', ...Array.from(new Set(marketStocks.map((stock) => stock.sector))).sort()], [marketStocks])
   const appliedFilters = useMemo<Filters>(() => ({
@@ -303,7 +308,7 @@ export default function App() {
     const recommendations = getRecommendations(filtered, priorities)
     return sortRecommendations(recommendations, sort)
   }, [filtered, priorities, sort])
-  const pagedResults = useMemo(() => paginate(ranked, page, 50), [ranked, page])
+  const pagedResults = useMemo(() => paginate(ranked, page, resultsPerPage), [ranked, page])
   useEffect(() => setPage(1), [filters, priorities, sort])
   const activeFilterCount = activeNumericFilters.size + [filters.sector !== defaultFilters.sector, filters.marketCap !== defaultFilters.marketCap, filters.insiderOnly].filter(Boolean).length
 
@@ -362,18 +367,20 @@ export default function App() {
     <TopBar view={view} setView={setView}/>
     <main className="dashboard">
       {view === 'screener' && <>
-        <section className="page-title"><div><span className="eyebrow">Equity research workspace</span><h1>Find signal in the market.</h1><p>Screen the universe, rank what matters, and investigate the strongest ideas.</p></div><div className={`as-of ${dataSource}`}><span><i/> {dataSource === 'live' ? 'Full US universe' : dataSource === 'cached' ? 'Cached US universe' : 'Market data'}</span><strong>{sourceLabel}</strong><small>{dataSource === 'loading' ? 'Loading listed equities' : dataSource === 'live' ? `${marketStocks.length.toLocaleString()} companies loaded` : dataSource === 'cached' ? `${marketStocks.length.toLocaleString()} companies · last known snapshot` : 'Provider unavailable; no demo prices shown'}</small></div></section>
-        <section className="toolbar card"><div className="search-box"><Search size={18}/><input ref={searchInputRef} aria-label="Search companies" placeholder="Enter exact ticker (e.g. AAPL)" value={filters.search} onChange={(event) => patchFilter('search', event.target.value)}/><kbd>⌘ K</kbd></div><button className={`filter-button ${filterOpen ? 'active' : ''}`} onClick={() => setFilterOpen(!filterOpen)}><SlidersHorizontal size={17}/> Filters {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button><div className="toolbar-divider"/><span className="result-count"><strong>{ranked.length}</strong> companies</span></section>
-        {filterOpen && <section className="filter-panel card">
+        <section className="page-title"><div><span className="eyebrow">Equity research workspace</span><h1>Find signal in the market.</h1><p>Screen the universe, rank what matters, and investigate the strongest ideas.</p></div><div className={`as-of ${dataSource}`}><span><i/> {dataSource === 'live' ? 'Full US universe' : dataSource === 'cached' ? 'Cached US universe' : 'Market data'}</span><strong>{sourceLabel}</strong><small>{dataSource === 'loading' ? 'Loading listed equities' : dataSource === 'live' ? `${marketStocks.length.toLocaleString()} companies · ${snapshotUpdatedAt ? `updated ${formatChartDate(snapshotUpdatedAt, '1d')}` : 'latest snapshot'}` : dataSource === 'cached' ? `${marketStocks.length.toLocaleString()} companies · last known snapshot` : 'Provider unavailable; no demo prices shown'}</small></div></section>
+        <section className="toolbar card"><div className="search-box"><Search size={18}/><input ref={searchInputRef} aria-label="Search companies" placeholder="Search ticker or company" value={filters.search} onChange={(event) => patchFilter('search', event.target.value)}/><kbd>⌘ K</kbd></div><button aria-expanded={filterOpen} aria-controls="screener-filters" className={`filter-button ${filterOpen ? 'active' : ''}`} onClick={() => setFilterOpen(!filterOpen)}><SlidersHorizontal size={17}/> Filters {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button><div className="toolbar-divider"/><span className="result-count"><strong>{ranked.length}</strong> companies</span></section>
+        {filterOpen && <section className="filter-panel card" id="screener-filters">
           <div className="filter-panel-head"><div><ListFilter size={17}/><strong>Refine universe</strong></div><button onClick={resetFilters}>Reset all</button></div>
           <div className="filter-grid"><label className="select-field"><span>Sector</span><div><select value={filters.sector} onChange={(event) => patchFilter('sector', event.target.value)}>{availableSectors.map((sector) => <option key={sector}>{sector}</option>)}</select><ChevronDown size={14}/></div></label><label className="select-field"><span>Market cap</span><div><select value={filters.marketCap} onChange={(event) => patchFilter('marketCap', event.target.value as Filters['marketCap'])}><option value="all">Any size</option><option value="mega">Mega cap ($200B+)</option><option value="large">Large cap ($10–200B)</option><option value="mid">Mid cap ($2–10B)</option><option value="small">Small cap (&lt;$2B)</option></select><ChevronDown size={14}/></div></label><SliderField label="Min. revenue growth" value={filters.minRevenueGrowth} min={-10} max={60} step={1} suffix="%" onChange={(value) => patchFilter('minRevenueGrowth', value)}/><SliderField label="Min. earnings growth" value={filters.minEarningsGrowth} min={-20} max={80} step={1} suffix="%" onChange={(value) => patchFilter('minEarningsGrowth', value)}/><SliderField label="Min. FCF growth" value={filters.minFcfGrowth} min={-20} max={60} step={1} suffix="%" onChange={(value) => patchFilter('minFcfGrowth', value)}/><SliderField label="Min. gross margin" value={filters.minGrossMargin} min={0} max={90} step={1} suffix="%" onChange={(value) => patchFilter('minGrossMargin', value)}/><SliderField label="Max. P/E ratio" value={filters.maxPe} min={5} max={80} step={1} suffix="×" onChange={(value) => patchFilter('maxPe', value)}/><SliderField label="Max. P/S ratio" value={filters.maxPs} min={1} max={30} step={1} suffix="×" onChange={(value) => patchFilter('maxPs', value)}/></div>
           <div className="priority-row"><div><span>Score priorities</span><small>Ratings adapt to what matters to you</small></div><div className="priority-chips">{metricOptions.map(({ key, label }) => <button className={priorities.includes(key) ? 'selected' : ''} onClick={() => togglePriority(key)} key={key}>{priorities.includes(key) && <Check size={12}/>} {label}</button>)}</div><label className="toggle" title={dataSource === 'live' || dataSource === 'cached' ? 'The current screener feed does not include insider transactions yet.' : undefined}><input type="checkbox" disabled={dataSource === 'live' || dataSource === 'cached'} checked={filters.insiderOnly} onChange={(event) => patchFilter('insiderOnly', event.target.checked)}/><span/><em>{dataSource === 'live' || dataSource === 'cached' ? 'Insider data not connected' : 'Insider buying only'}</em></label></div>
         </section>}
         <section className="results-header"><div><h2>Ranked companies</h2><p>Click any column heading to change the ranking</p></div><label>Sort by <select value={sort.key} onChange={(event) => setSort({ key: event.target.value as SortKey, direction: 'desc' })}><option value="score">Signal score</option><option value="company">Company</option><option value="price">Price</option><option value="change">1D performance</option><option value="marketCap">Market cap</option><option value="revenueGrowth">Revenue growth</option><option value="fcfGrowth">FCF growth</option><option value="grossMargin">Gross margin</option><option value="pe">P/E</option></select></label></section>
-        {dataSource === 'error'
-          ? <div className="empty card"><Filter size={28}/><h3>Market data is temporarily unavailable</h3><p>The live provider could not return verified stocks or prices. Try again after its API allowance resets.</p></div>
+        {dataSource === 'loading'
+          ? <div className="empty card loading-state" role="status" aria-label="Loading market universe"><BarChart3 size={28}/><h3>Loading market universe</h3><p>Connecting to the latest verified screener snapshot…</p></div>
+          : dataSource === 'error'
+          ? <div className="empty card"><Filter size={28}/><h3>Market data is temporarily unavailable</h3><p>The live provider could not return verified stocks or prices.</p><button className="retry-button" onClick={() => setMarketRetryVersion((version) => version + 1)}>Retry market data</button></div>
           : <StockTable ranked={displayedPage} watchlist={watchlist} sort={sort} onSort={changeSort} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>}
-        {ranked.length > 0 && <Pagination page={pagedResults.page} pageCount={pagedResults.pageCount} total={pagedResults.total} onPage={setPage}/>} 
+        {dataSource !== 'loading' && ranked.length > 0 && <Pagination page={pagedResults.page} pageCount={pagedResults.pageCount} total={pagedResults.total} pageSize={resultsPerPage} onPage={setPage}/>} 
       </>}
       {view === 'ideas' && <Ideas universe={quotedUniverse} priorities={priorities} onOpen={setSelectedStock}/>}
       {view === 'watchlist' && <Watchlist universe={quotedUniverse} tickers={watchlist} priorities={priorities} sort={sort} onSort={changeSort} onOpen={setSelectedStock} onToggleSave={toggleWatchlist}/>}
@@ -381,8 +388,8 @@ export default function App() {
   </div>
 }
 
-function Pagination({ page, pageCount, total, onPage }: { page: number; pageCount: number; total: number; onPage: (page: number) => void }) {
-  return <nav className="pagination" aria-label="Stock results pagination"><span>Showing {(page - 1) * 50 + 1}–{Math.min(page * 50, total)} of {total.toLocaleString()}</span><div><button aria-label="Previous page" disabled={page === 1} onClick={() => onPage(page - 1)}><ArrowLeft size={15}/></button><strong>Page {page} of {pageCount}</strong><button aria-label="Next page" disabled={page === pageCount} onClick={() => onPage(page + 1)}><ArrowRight size={15}/></button></div></nav>
+function Pagination({ page, pageCount, total, pageSize, onPage }: { page: number; pageCount: number; total: number; pageSize: number; onPage: (page: number) => void }) {
+  return <nav className="pagination" aria-label="Stock results pagination"><span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total.toLocaleString()}</span><div><button aria-label="Previous page" disabled={page === 1} onClick={() => onPage(page - 1)}><ArrowLeft size={15}/></button><strong>Page {page} of {pageCount}</strong><button aria-label="Next page" disabled={page === pageCount} onClick={() => onPage(page + 1)}><ArrowRight size={15}/></button></div></nav>
 }
 
 function TopBar({ view, setView }: { view: string; setView: (view: 'screener' | 'ideas' | 'watchlist') => void }) {
@@ -419,5 +426,5 @@ function Ideas({ universe, priorities, onOpen }: { universe: Stock[]; priorities
 
 function Watchlist({ universe, tickers, priorities, sort, onSort, onOpen, onToggleSave }: { universe: Stock[]; tickers: string[]; priorities: MetricKey[]; sort: SortState; onSort: (key: SortKey) => void; onOpen: (stock: Stock) => void; onToggleSave: (ticker: string) => void }) {
   const ranked = sortRecommendations(getRecommendations(universe.filter((stock) => tickers.includes(stock.ticker)), priorities), sort)
-  return <><section className="simple-hero"><span className="eyebrow"><Bookmark size={14}/> Saved research</span><h1>Your watchlist.</h1><p>Keep the companies worth another look in one focused view.</p></section><StockTable ranked={ranked} watchlist={tickers} sort={sort} onSort={onSort} onOpen={onOpen} onToggleSave={onToggleSave}/></>
+  return <><section className="simple-hero"><span className="eyebrow"><Bookmark size={14}/> Saved research</span><h1>Your watchlist.</h1><p>Keep the companies worth another look in one focused view.</p></section>{tickers.length === 0 ? <div className="empty card"><Bookmark size={28}/><h3>Your watchlist is empty</h3><p>Save a company from the screener to keep it here across visits.</p></div> : <StockTable ranked={ranked} watchlist={tickers} sort={sort} onSort={onSort} onOpen={onOpen} onToggleSave={onToggleSave}/>}</>
 }
