@@ -57,12 +57,12 @@ const formatMarketCap = (value: number | null) => value === null ? 'N/A' : value
 const exceeds = (value: number | null, threshold: number) => value !== null && value > threshold
 const below = (value: number | null, threshold: number) => value !== null && value < threshold
 
-const chartRanges: Array<{ key: ChartRange; label: string; title: string }> = [
-  { key: '1d', label: '1D', title: 'Today’s intraday performance' },
-  { key: '1m', label: '1M', title: '1 month trajectory' },
-  { key: '6m', label: '6M', title: '6 month trajectory' },
-  { key: '1y', label: '1Y', title: '1 year trajectory' },
-  { key: '5y', label: '5Y', title: '5 year trajectory' },
+const chartRanges: Array<{ key: ChartRange; label: string; title: string; accessibleLabel: string }> = [
+  { key: '1d', label: '1D', title: 'Today’s intraday performance', accessibleLabel: '1 day price range' },
+  { key: '1m', label: '1M', title: '1 month trajectory', accessibleLabel: '1 month price range' },
+  { key: '6m', label: '6M', title: '6 month trajectory', accessibleLabel: '6 month price range' },
+  { key: '1y', label: '1Y', title: '1 year trajectory', accessibleLabel: '1 year price range' },
+  { key: '5y', label: '5Y', title: '5 year trajectory', accessibleLabel: '5 year price range' },
 ]
 
 const formatChartDate = (value: string, range: ChartRange) => {
@@ -104,12 +104,15 @@ function Sparkline({ values, dates = [], range = '1y', positive = true, large = 
   const hoveredValue = hoveredIndex === null ? null : values[hoveredIndex]
   const hoveredDate = hoveredIndex === null ? '' : formatChartDate(dates[hoveredIndex] ?? '', range)
   const tooltipX = hovered ? Math.min(plotRight - 70, Math.max(plotLeft + 70, hovered.x)) : 0
+  const accessibleSummary = large
+    ? `Price chart with ${values.length} observations, from ${formatPrice(values[0])} to ${formatPrice(values.at(-1) ?? null)}; low ${formatPrice(rawMin)}, high ${formatPrice(rawMax)}`
+    : 'Price trend'
   return (
     <svg
       className={large ? 'hero-chart interactive-chart' : 'sparkline'}
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label={large ? 'Interactive price chart' : 'Price trend'}
+      aria-label={accessibleSummary}
       onMouseMove={large ? (event) => {
         let chartX: number
         const transform = event.currentTarget.getScreenCTM()
@@ -172,9 +175,11 @@ function StockDetail({ stock, priorities, isSaved, onBack, onToggleSave }: { sto
   const [chartRange, setChartRange] = useState<ChartRange>('1y')
   const [chartHistory, setChartHistory] = useState<PricePoint[]>(stock.sparkline.map((price) => ({ date: '', price })))
   const [chartLoading, setChartLoading] = useState(false)
+  const [chartError, setChartError] = useState(false)
   useEffect(() => {
     const controller = new AbortController()
     setChartLoading(true)
+    setChartError(false)
     fetch(`/api/quotes?tickers=${encodeURIComponent(stock.ticker)}&range=${chartRange}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error('Chart data unavailable')
@@ -182,12 +187,13 @@ function StockDetail({ stock, priorities, isSaved, onBack, onToggleSave }: { sto
       })
       .then((payload) => {
         const quote = payload.quotes?.[0]
-        if (!quote) return
+        if (!quote) throw new Error('Chart data unavailable')
         setChartHistory(quote.history ?? quote.sparkline.map((price) => ({ date: '', price })))
       })
       .catch((error) => {
         if (error instanceof DOMException && error.name === 'AbortError') return
         setChartHistory([])
+        setChartError(true)
       })
       .finally(() => {
         if (!controller.signal.aborted) setChartLoading(false)
@@ -213,7 +219,7 @@ function StockDetail({ stock, priorities, isSaved, onBack, onToggleSave }: { sto
       <button className={`save-button ${isSaved ? 'saved' : ''}`} onClick={onToggleSave}>{isSaved ? <BookmarkCheck size={17}/> : <Bookmark size={17}/>} {isSaved ? 'Saved' : 'Add to watchlist'}</button>
     </section>
     <section className="detail-grid">
-      <div className="chart-card card"><div className="card-heading"><div><span className="eyebrow">Price performance {chartPerformance !== null && <em className={chartPerformance >= 0 ? 'positive' : 'negative'}>{chartPerformance >= 0 ? '+' : ''}{chartPerformance.toFixed(2)}%</em>}</span><h2>{selectedRange.title}</h2></div><div className="range-tabs">{chartRanges.map(({ key, label }) => <button type="button" className={chartRange === key ? 'active' : ''} onClick={() => setChartRange(key)} key={key}>{label}</button>)}</div></div>{chartLoading && !chartHistory.length ? <div className="chart-loading">Loading price history…</div> : <Sparkline values={chartHistory.map(({ price }) => price)} dates={chartHistory.map(({ date }) => date)} range={chartRange} positive={chartPerformance === null || chartPerformance >= 0} large/>}</div>
+      <div className="chart-card card"><div className="card-heading"><div><span className="eyebrow">Price performance {chartPerformance !== null && <em className={chartPerformance >= 0 ? 'positive' : 'negative'}>{chartPerformance >= 0 ? '+' : ''}{chartPerformance.toFixed(2)}%</em>}</span><h2>{selectedRange.title}</h2></div><div className="range-tabs" aria-label="Price chart range">{chartRanges.map(({ key, label, accessibleLabel }) => <button type="button" aria-label={accessibleLabel} aria-pressed={chartRange === key} className={chartRange === key ? 'active' : ''} onClick={() => setChartRange(key)} key={key}>{label}</button>)}</div></div>{chartLoading && !chartHistory.length ? <div className="chart-loading" role="status">Loading price history…</div> : chartError ? <div className="chart-loading" role="alert">Price history is unavailable for this range.</div> : <Sparkline values={chartHistory.map(({ price }) => price)} dates={chartHistory.map(({ date }) => date)} range={chartRange} positive={chartPerformance === null || chartPerformance >= 0} large/>}</div>
       <div className="rating-card card"><span className="eyebrow">Signal rating</span><div className="rating-main"><ScoreBadge score={result.score} size="large"/><div><h2>{scoreToLabel(result.score)}</h2><p>{result.coverage.available} of {result.coverage.selected} selected factors reported · {result.coverage.ratio >= .8 ? 'High' : result.coverage.ratio >= .5 ? 'Medium' : 'Low'} data confidence</p></div></div><BreakdownBars breakdown={result.breakdown}/></div>
     </section>
     <section className="analysis-grid">
@@ -400,6 +406,7 @@ export default function App() {
           <div className="priority-row"><div><span>Score priorities</span><small>Ratings adapt to what matters to you</small></div><div className="priority-chips">{metricOptions.map(({ key, label }) => <button aria-pressed={priorities.includes(key)} className={priorities.includes(key) ? 'selected' : ''} onClick={() => togglePriority(key)} key={key}>{priorities.includes(key) && <Check size={12}/>} {label}</button>)}</div><label className="toggle" title={dataSource === 'live' || dataSource === 'cached' ? 'The current screener feed does not include insider transactions yet.' : undefined}><input type="checkbox" disabled={dataSource === 'live' || dataSource === 'cached'} checked={filters.insiderOnly} onChange={(event) => patchFilter('insiderOnly', event.target.checked)}/><span/><em>{dataSource === 'live' || dataSource === 'cached' ? 'Insider data not connected' : 'Insider buying only'}</em></label></div>
         </section>}
         {activeCriteria.length > 0 && <div className="active-criteria" aria-label="Active filters">{activeCriteria.map(({ key, label }) => <button aria-label={`Remove ${filterLabels[key as NumericFilterKey] ?? label} filter`} onClick={() => removeCriterion(key)} key={key}>{label}<X size={12}/></button>)}</div>}
+        <details className="methodology card"><summary>How Signal scores companies</summary><div><p>The base score is 34% growth, 26% quality, 25% valuation, and 15% momentum. Selected priorities blend equally with that base score.</p><p>Missing factors are excluded from priority averages, categories with no reported inputs use a neutral baseline, and low coverage caps the final score. Fundamentals come from the latest Business Quant screener snapshot; prices refresh from the connected quote feed.</p><p>Signal is a transparent research heuristic, not a backtested prediction, and is not investment advice.</p></div></details>
         <section className="results-header"><div><h2>Ranked companies</h2><p>Click any column heading to change the ranking</p></div><div className="results-actions"><button className="export-button" aria-label="Export filtered results as CSV" disabled={!ranked.length} onClick={() => downloadResultsCsv(ranked)}>Export CSV</button><label>Sort by <select value={sort.key} onChange={(event) => setSort({ key: event.target.value as SortKey, direction: 'desc' })}><option value="score">Signal score</option><option value="company">Company</option><option value="price">Price</option><option value="change">1D performance</option><option value="marketCap">Market cap</option><option value="revenueGrowth">Revenue growth</option><option value="fcfGrowth">FCF growth</option><option value="grossMargin">Gross margin</option><option value="pe">P/E</option></select></label><button className="sort-direction" aria-label={sort.direction === 'desc' ? 'Sort ascending' : 'Sort descending'} onClick={() => setSort((current) => ({ ...current, direction: current.direction === 'desc' ? 'asc' : 'desc' }))}>{sort.direction === 'desc' ? <ArrowUp size={15}/> : <ArrowDown size={15}/>}</button></div></section>
         {dataSource === 'loading'
           ? <div className="empty card loading-state" role="status" aria-label="Loading market universe"><BarChart3 size={28}/><h3>Loading market universe</h3><p>Connecting to the latest verified screener snapshot…</p></div>
@@ -436,7 +443,7 @@ function StockTable({ ranked, watchlist, sort, onSort, onOpen, onToggleSave }: {
     { key: 'pe', label: 'P/E', accessibleLabel: 'P/E' },
     { key: 'score', label: 'Signal', accessibleLabel: 'Signal' },
   ]
-  return <section className="table-card card"><div className="stock-table table-head">{columns.map((column) => { const active = sort.key === column.key; return <button type="button" aria-label={`Sort by ${column.accessibleLabel}`} aria-pressed={active} className={active ? 'active' : ''} data-direction={active ? sort.direction : undefined} onClick={() => onSort(column.key)} key={column.key}><span>{column.label}</span>{active && (sort.direction === 'desc' ? <ArrowDown/> : <ArrowUp/>)}</button> })}<span/></div>{ranked.map(({ stock, score }) => { const saved = watchlist.includes(stock.ticker); return <div className="stock-table table-row" key={stock.ticker} onClick={() => onOpen(stock)}><button className="company-cell company-open" aria-label={`Open ${stock.ticker} details`} onClick={() => onOpen(stock)}><i className="company-logo">{stock.ticker[0]}</i><span><strong>{stock.ticker}</strong><small>{stock.name}</small></span></button><span className="table-price"><strong>{formatPrice(stock.price)}</strong></span><span className="performance-cell">{stock.change === null ? <small>N/A</small> : <small className={stock.change >= 0 ? 'positive' : 'negative'}>{stock.change >= 0 ? <ArrowUpRight/> : <ArrowDownRight/>}{Math.abs(stock.change).toFixed(2)}%</small>}<Sparkline values={stock.sparkline} positive={stock.change === null || stock.change >= 0}/></span><span>{formatMarketCap(stock.marketCap)}</span><span className={exceeds(stock.revenueGrowth, 15) ? 'metric-good' : ''}>{formatMetric(stock.revenueGrowth, '%')}</span><span className={exceeds(stock.fcfGrowth, 15) ? 'metric-good' : ''}>{formatMetric(stock.fcfGrowth, '%')}</span><span>{formatMetric(stock.grossMargin, '%')}</span><span>{formatMetric(stock.pe, '×')}</span><span className="signal-cell"><ScoreBadge score={score}/><span><strong>{scoreToLabel(score)}</strong><small>of 100</small></span></span><span className="row-actions"><button aria-label={saved ? `Remove ${stock.ticker} from watchlist` : `Save ${stock.ticker} to watchlist`} aria-pressed={saved} onClick={(event) => { event.stopPropagation(); onToggleSave(stock.ticker) }}>{saved ? <BookmarkCheck/> : <Bookmark/>}</button><ArrowRight aria-hidden="true"/></span></div> })}</section>
+  return <section className="table-card card"><div className="stock-table table-head">{columns.map((column) => { const active = sort.key === column.key; return <button type="button" aria-label={`Sort by ${column.accessibleLabel}`} aria-pressed={active} className={active ? 'active' : ''} data-direction={active ? sort.direction : undefined} onClick={() => onSort(column.key)} key={column.key}><span>{column.label}</span>{active && (sort.direction === 'desc' ? <ArrowDown/> : <ArrowUp/>)}</button> })}<span/></div>{ranked.map(({ stock, score, coverage }) => { const saved = watchlist.includes(stock.ticker); return <div className="stock-table table-row" key={stock.ticker} onClick={() => onOpen(stock)}><button className="company-cell company-open" aria-label={`Open ${stock.ticker} details`} onClick={() => onOpen(stock)}><i className="company-logo">{stock.ticker[0]}</i><span><strong>{stock.ticker}</strong><small>{stock.name}</small></span></button><span className="table-price"><strong>{formatPrice(stock.price)}</strong></span><span className="performance-cell">{stock.change === null ? <small>N/A</small> : <small className={stock.change >= 0 ? 'positive' : 'negative'}>{stock.change >= 0 ? <ArrowUpRight/> : <ArrowDownRight/>}{Math.abs(stock.change).toFixed(2)}%</small>}<Sparkline values={stock.sparkline} positive={stock.change === null || stock.change >= 0}/></span><span>{formatMarketCap(stock.marketCap)}</span><span className={exceeds(stock.revenueGrowth, 15) ? 'metric-good' : ''}>{formatMetric(stock.revenueGrowth, '%')}</span><span className={exceeds(stock.fcfGrowth, 15) ? 'metric-good' : ''}>{formatMetric(stock.fcfGrowth, '%')}</span><span>{formatMetric(stock.grossMargin, '%')}</span><span>{formatMetric(stock.pe, '×')}</span><span className="signal-cell"><ScoreBadge score={score}/><span><strong>{scoreToLabel(score)}</strong><small>{coverage.available}/{coverage.selected} factors</small></span></span><span className="row-actions"><button aria-label={saved ? `Remove ${stock.ticker} from watchlist` : `Save ${stock.ticker} to watchlist`} aria-pressed={saved} onClick={(event) => { event.stopPropagation(); onToggleSave(stock.ticker) }}>{saved ? <BookmarkCheck/> : <Bookmark/>}</button><ArrowRight aria-hidden="true"/></span></div> })}</section>
 }
 
 function Ideas({ universe, priorities, onOpen }: { universe: Stock[]; priorities: MetricKey[]; onOpen: (stock: Stock) => void }) {

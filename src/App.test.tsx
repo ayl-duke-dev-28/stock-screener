@@ -195,12 +195,12 @@ describe('screener criteria controls', () => {
     await waitFor(() => expect(container.querySelector('.table-row')).toBeInTheDocument())
     fireEvent.click(container.querySelector('.table-row')!)
 
-    expect(['1D', '1M', '6M', '1Y', '5Y'].map((range) => screen.getByRole('button', { name: range }))).toHaveLength(5)
-    fireEvent.click(screen.getByRole('button', { name: '1M' }))
+    expect(['1 day', '1 month', '6 month', '1 year', '5 year'].map((range) => screen.getByRole('button', { name: `${range} price range` }))).toHaveLength(5)
+    fireEvent.click(screen.getByRole('button', { name: '1 month price range' }))
     await waitFor(() => expect(fetcher).toHaveBeenCalledWith(expect.stringContaining('range=1m'), expect.objectContaining({ signal: expect.any(AbortSignal) })))
-    expect(screen.getByRole('button', { name: '1M' })).toHaveClass('active')
+    expect(screen.getByRole('button', { name: '1 month price range' })).toHaveClass('active')
 
-    const chart = await screen.findByRole('img', { name: 'Interactive price chart' })
+    const chart = await screen.findByRole('img', { name: /Price chart with 3 observations/ })
     vi.spyOn(chart, 'getBoundingClientRect').mockReturnValue({
       x: 0, y: 0, top: 0, right: 600, bottom: 190, left: 0, width: 600, height: 190, toJSON: () => ({}),
     })

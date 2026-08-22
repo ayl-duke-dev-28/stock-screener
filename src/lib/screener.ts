@@ -98,7 +98,7 @@ export function getRecommendations(stocks: Stock[], priorities: MetricKey[] = []
             : stock.change !== null
               ? `Positive market signal with ${stock.change.toFixed(1)}% recent momentum`
               : 'Ranked from the latest available reported fundamentals'
-      return { stock, score: result.score, breakdown: result.breakdown, reason }
+      return { stock, score: result.score, breakdown: result.breakdown, coverage: result.coverage, reason }
     })
     .sort((a, b) => b.score - a.score)
 }
