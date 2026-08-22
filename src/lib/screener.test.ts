@@ -101,5 +101,6 @@ describe('getRecommendations', () => {
     const results = getRecommendations([valueStock, strongStock], ['revenueGrowth'])
     expect(results[0].stock.ticker).toBe('GROW')
     expect(results.every((item) => item.score >= 1 && item.reason.length > 0)).toBe(true)
+    expect(results.every((item) => item.coverage.selected === 1)).toBe(true)
   })
 })

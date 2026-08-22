@@ -133,4 +133,34 @@ describe('resilient screener workflow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ideas NEW' }))
     expect(screen.queryByText('Insiders leaning in')).not.toBeInTheDocument()
   })
+
+  it('documents the ranking methodology in the product', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: string) => Promise.resolve(
+      String(input).startsWith('/api/quotes')
+        ? new Response(JSON.stringify({ quotes: [] }))
+        : marketResponse(),
+    )))
+
+    render(<App />)
+    await screen.findByText('Test market')
+
+    expect(screen.getByText(/34% growth, 26% quality, 25% valuation, and 15% momentum/i)).toBeInTheDocument()
+    expect(screen.getByText(/missing factors are excluded/i)).toBeInTheDocument()
+    expect(screen.getByText(/not investment advice/i)).toBeInTheDocument()
+  })
+
+  it('announces chart errors and exposes the selected chart range', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: string) => Promise.resolve(
+      String(input).startsWith('/api/quotes')
+        ? new Response(JSON.stringify({ error: 'Unavailable' }), { status: 502 })
+        : marketResponse(),
+    )))
+
+    render(<App />)
+    const ticker = await screen.findByText(stocks[0].ticker, { selector: '.company-cell strong' })
+    fireEvent.click(ticker)
+
+    expect(screen.getByRole('button', { name: '1 year price range' })).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Price history is unavailable')
+  })
 })
