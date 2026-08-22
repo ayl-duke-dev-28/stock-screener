@@ -51,4 +51,9 @@ export interface ScoreBreakdown {
 export interface ScoreResult {
   score: number
   breakdown: ScoreBreakdown
+  coverage: {
+    available: number
+    selected: number
+    ratio: number
+  }
 }

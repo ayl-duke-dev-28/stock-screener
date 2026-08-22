@@ -24,7 +24,8 @@ export function scoreStock(stock: Stock, priorities: MetricKey[] = []): ScoreRes
     ? priorities
     : ['revenueGrowth', 'earningsGrowth', 'fcfGrowth', 'grossMargin', 'pe', 'ps']
   const selectedScores = selectedMetrics.map((key) => metricScore(stock, key))
-  const coverage = selectedScores.filter((value) => value !== null).length / selectedScores.length
+  const available = selectedScores.filter((value) => value !== null).length
+  const coverage = available / selectedScores.length
   const breakdown: ScoreBreakdown = {
     growth: Math.round(average([
       metricScore(stock, 'revenueGrowth'), metricScore(stock, 'earningsGrowth'), metricScore(stock, 'fcfGrowth'),
@@ -37,7 +38,11 @@ export function scoreStock(stock: Stock, priorities: MetricKey[] = []): ScoreRes
   const priorityScore = priorities.length ? average(selectedScores) : baseScore
   const rawScore = clamp(baseScore * 0.45 + priorityScore * 0.55, 1, 100)
   const confidenceCap = 40 + coverage * 60
-  return { score: Math.round(Math.min(rawScore, confidenceCap)), breakdown }
+  return {
+    score: Math.round(Math.min(rawScore, confidenceCap)),
+    breakdown,
+    coverage: { available, selected: selectedScores.length, ratio: coverage },
+  }
 }
 
 export function scoreToLabel(score: number): string {
@@ -66,7 +71,7 @@ const passesMaximum = (value: number | null, maximum: number) =>
 export function filterStocks(stocks: Stock[], filters: Filters): Stock[] {
   const query = filters.search.trim().toLowerCase()
   return stocks.filter((stock) =>
-    (!query || stock.ticker.toLowerCase() === query) &&
+    (!query || stock.ticker.toLowerCase().startsWith(query) || stock.name.toLowerCase().includes(query)) &&
     (filters.sector === 'All sectors' || stock.sector === filters.sector) &&
     fitsMarketCap(stock.marketCap, filters.marketCap) &&
     passesMinimum(stock.revenueGrowth, filters.minRevenueGrowth) &&

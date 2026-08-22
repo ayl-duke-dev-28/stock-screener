@@ -114,9 +114,11 @@ const getMetric = (record: ProviderRecord, metric: ResolvedMetric | undefined) =
 
 export function mapProviderStock(record: ProviderRecord, metrics: MetricMap): Stock {
   const ticker = String(record.ticker ?? record.symbol ?? '').trim().toUpperCase()
-  const price = getMetric(record, metrics.price)
+  const rawPrice = getMetric(record, metrics.price)
+  const price = rawPrice !== null && rawPrice > 0 ? rawPrice : null
   const change = getMetric(record, metrics.change)
   const rawMarketCap = getMetric(record, metrics.marketCap)
+  const rawGrossMargin = getMetric(record, metrics.grossMargin)
   const sector = String(record.sector ?? '').trim() || 'Unclassified'
   return {
     ticker,
@@ -124,11 +126,11 @@ export function mapProviderStock(record: ProviderRecord, metrics: MetricMap): St
     sector,
     price,
     change,
-    marketCap: rawMarketCap === null ? null : rawMarketCap / 1_000_000_000,
+    marketCap: rawMarketCap !== null && rawMarketCap > 0 ? rawMarketCap / 1_000_000_000 : null,
     revenueGrowth: getMetric(record, metrics.revenueGrowth),
     earningsGrowth: getMetric(record, metrics.earningsGrowth),
     fcfGrowth: getMetric(record, metrics.fcfGrowth),
-    grossMargin: getMetric(record, metrics.grossMargin),
+    grossMargin: rawGrossMargin !== null && rawGrossMargin <= 100 ? rawGrossMargin : null,
     pe: getMetric(record, metrics.pe),
     ps: getMetric(record, metrics.ps),
     insiderActivity: getMetric(record, metrics.insiderActivity),
