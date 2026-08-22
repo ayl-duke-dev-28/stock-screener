@@ -137,6 +137,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .idea-feature > span, .theme-tag { font-size: 10px; }
 .idea-feature button { font-size: 11px; }
 .theme-card > p { font-size: 12px; line-height: 1.65; }
+.ideas-empty .retry-button { margin-top: 20px; }
+.theme-picks .theme-empty { margin: 18px 0 0; color: var(--muted); font-size: 11px; }
 .results-actions { display: flex; align-items: center; gap: 8px; }
 .export-button, .sort-direction, .retry-button { border: 1px solid var(--line); background: #fff; color: #405049; border-radius: 8px; min-height: 34px; padding: 0 11px; cursor: pointer; font: 600 11px Manrope; }
 .export-button:disabled { opacity: .45; cursor: not-allowed; }
