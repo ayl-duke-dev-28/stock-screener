@@ -15,11 +15,12 @@ describe('development API routing', () => {
     expect(packageJson.scripts['dev:web']).toContain('--config vite.config.ts')
   })
 
-  it('measures the provider coordination code in coverage runs', () => {
+  it('measures the application and provider coordination code in coverage runs', () => {
     expect(config.test?.coverage?.include).toEqual(expect.arrayContaining([
       'server/businessQuant.ts',
       'server/marketData.ts',
-      'src/lib/**/*.ts',
+      'server/http.ts',
+      'src/**/*.{ts,tsx}',
     ]))
   })
 })

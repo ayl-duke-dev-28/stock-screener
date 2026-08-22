@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
   "scripts": {
     "dev": "concurrently -k -n api,web -c green,cyan \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch server/index.ts",
@@ -10,28 +13,29 @@
     "start": "tsx server/index.ts",
     "build": "tsc -b && vite build --config vite.config.ts",
     "test": "vitest run --config vite.config.ts",
-    "test:coverage": "vitest run --config vite.config.ts --coverage"
+    "test:coverage": "vitest run --config vite.config.ts --coverage",
+    "check": "npm test && npm run test:coverage && npm run build"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "lucide-react": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "recharts": "latest",
-    "vite": "latest"
+    "@vitejs/plugin-react": "6.0.5",
+    "lucide-react": "1.31.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "recharts": "3.10.1",
+    "vite": "8.2.1"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "latest",
-    "@testing-library/react": "latest",
-    "@testing-library/user-event": "latest",
-    "@types/node": "^26.2.0",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "@vitest/coverage-v8": "latest",
-    "concurrently": "^10.0.4",
-    "jsdom": "latest",
-    "tsx": "^4.23.11",
-    "typescript": "latest",
-    "vitest": "latest"
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.2",
+    "@testing-library/user-event": "14.6.3",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitest/coverage-v8": "4.1.10",
+    "concurrently": "10.0.4",
+    "jsdom": "30.0.1",
+    "tsx": "4.23.11",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
   }
 }
