@@ -30,6 +30,21 @@ describe('scoreStock', () => {
       growth: expect.any(Number), quality: expect.any(Number),
       valuation: expect.any(Number), momentum: expect.any(Number),
     }))
+    expect(result.coverage).toEqual({ available: 6, selected: 6, ratio: 1 })
+  })
+
+  it('reports low confidence when only a minority of selected factors are available', () => {
+    const result = scoreStock({
+      ...strongStock,
+      earningsGrowth: null,
+      fcfGrowth: null,
+      grossMargin: null,
+      pe: null,
+      ps: null,
+    })
+
+    expect(result.coverage).toEqual({ available: 1, selected: 6, ratio: 1 / 6 })
+    expect(result.score).toBeLessThanOrEqual(50)
   })
 
   it('changes weighting to match the selected screening criteria', () => {
@@ -67,7 +82,7 @@ describe('filterStocks', () => {
     })).toHaveLength(2)
   })
 
-  it('matches only complete ticker symbols, ignoring case and surrounding spaces', () => {
+  it('matches ticker prefixes and company names, ignoring case and surrounding spaces', () => {
     const filters = {
       search: '  grow  ', sector: 'All sectors', marketCap: 'all' as const,
       minRevenueGrowth: 0, minEarningsGrowth: 0, minFcfGrowth: 0,
@@ -75,8 +90,9 @@ describe('filterStocks', () => {
     }
 
     expect(filterStocks([strongStock, valueStock], filters).map((stock) => stock.ticker)).toEqual(['GROW'])
-    expect(filterStocks([strongStock, valueStock], { ...filters, search: 'GRO' })).toEqual([])
-    expect(filterStocks([strongStock, valueStock], { ...filters, search: 'Growth Co' })).toEqual([])
+    expect(filterStocks([strongStock, valueStock], { ...filters, search: 'GRO' }).map((stock) => stock.ticker)).toEqual(['GROW'])
+    expect(filterStocks([strongStock, valueStock], { ...filters, search: 'growth co' }).map((stock) => stock.ticker)).toEqual(['GROW'])
+    expect(filterStocks([strongStock, valueStock], { ...filters, search: 'co' }).map((stock) => stock.ticker)).toEqual(['GROW', 'VALU'])
   })
 })
 

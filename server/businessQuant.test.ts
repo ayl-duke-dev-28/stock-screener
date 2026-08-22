@@ -93,6 +93,23 @@ describe('Business Quant market adapter', () => {
     }))
   })
 
+  it('rejects impossible provider values instead of ranking or displaying them', () => {
+    const stock = mapProviderStock({
+      ticker: 'BAD',
+      Price: -4,
+      'Market Cap': -1_000_000,
+      'Gross Margin (TTM)': '362229443.8%',
+      'Revenue Growth (1y) (TTM)': '28925.7%',
+    }, resolveMetrics(metadata))
+
+    expect(stock).toEqual(expect.objectContaining({
+      price: null,
+      marketCap: null,
+      grossMargin: null,
+      revenueGrowth: 28925.7,
+    }))
+  })
+
   it('fetches every page of the full US equity universe and returns one combined dataset', async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(metadata)))
