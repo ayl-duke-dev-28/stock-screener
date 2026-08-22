@@ -74,6 +74,14 @@ const formatChartDate = (value: string, range: ChartRange) => {
     : { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
 }
 
+const formatSnapshotDate = (value: string) => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+  }).format(date)
+}
+
 function Sparkline({ values, dates = [], range = '1y', positive = true, large = false }: { values: number[]; dates?: string[]; range?: ChartRange; positive?: boolean; large?: boolean }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   if (values.length < 2) return <span className={large ? 'hero-chart' : 'sparkline'} role="img" aria-label="Price trend unavailable">—</span>
@@ -398,7 +406,7 @@ export default function App() {
     <TopBar view={view} setView={setView}/>
     <main className="dashboard">
       {view === 'screener' && <>
-        <section className="page-title"><div><span className="eyebrow">Equity research workspace</span><h1>Find signal in the market.</h1><p>Screen the universe, rank what matters, and investigate the strongest ideas.</p></div><div className={`as-of ${dataSource}`}><span><i/> {dataSource === 'live' ? 'Full US universe' : dataSource === 'cached' ? 'Cached US universe' : 'Market data'}</span><strong>{sourceLabel}</strong><small>{dataSource === 'loading' ? 'Loading listed equities' : dataSource === 'live' ? `${marketStocks.length.toLocaleString()} companies · ${snapshotUpdatedAt ? `updated ${formatChartDate(snapshotUpdatedAt, '1d')}` : 'latest snapshot'}` : dataSource === 'cached' ? `${marketStocks.length.toLocaleString()} companies · last known snapshot` : 'Provider unavailable; no demo prices shown'}</small></div></section>
+        <section className="page-title"><div><span className="eyebrow">Equity research workspace</span><h1>Find signal in the market.</h1><p>Screen the universe, rank what matters, and investigate the strongest ideas.</p></div><div className={`as-of ${dataSource}`}><span><i/> {dataSource === 'live' ? 'Full US universe' : dataSource === 'cached' ? 'Cached US universe' : 'Market data'}</span><strong>{sourceLabel}</strong><small>{dataSource === 'loading' ? 'Loading listed equities' : dataSource === 'live' ? `${marketStocks.length.toLocaleString()} companies · ${snapshotUpdatedAt ? `updated ${formatSnapshotDate(snapshotUpdatedAt)}` : 'latest snapshot'}` : dataSource === 'cached' ? `${marketStocks.length.toLocaleString()} companies · ${snapshotUpdatedAt ? `cached snapshot from ${formatSnapshotDate(snapshotUpdatedAt)}` : 'snapshot time unavailable'}` : 'Provider unavailable; no demo prices shown'}</small></div></section>
         <section className="toolbar card"><div className="search-box"><Search size={18}/><input ref={searchInputRef} aria-label="Search companies" placeholder="Search ticker or company" value={filters.search} onChange={(event) => patchFilter('search', event.target.value)}/><kbd>⌘ K</kbd></div><button aria-expanded={filterOpen} aria-controls="screener-filters" className={`filter-button ${filterOpen ? 'active' : ''}`} onClick={() => setFilterOpen(!filterOpen)}><SlidersHorizontal size={17}/> Filters {activeFilterCount > 0 && <span>{activeFilterCount}</span>}</button><div className="toolbar-divider"/><span className="result-count"><strong>{ranked.length}</strong> companies</span></section>
         {filterOpen && <section className="filter-panel card" id="screener-filters">
           <div className="filter-panel-head"><div><ListFilter size={17}/><strong>Refine universe</strong></div><button onClick={resetFilters}>Reset all</button></div>
