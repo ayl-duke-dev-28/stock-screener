@@ -134,7 +134,7 @@ describe('screener criteria controls', () => {
     const { container } = render(<App />)
 
     await waitFor(() => expect(screen.getByText('121', { selector: '.result-count strong' })).toBeInTheDocument())
-    expect(container.querySelectorAll('.table-row')).toHaveLength(50)
+    expect(container.querySelectorAll('.table-row')).toHaveLength(25)
     expect(screen.getByText('Business Quant')).toBeInTheDocument()
     await waitFor(() => expect(fetcher).toHaveBeenCalledWith(expect.stringContaining('/api/quotes?tickers=')))
     expect(fetcher).toHaveBeenCalledWith(expect.stringContaining('range=1m'))
@@ -142,7 +142,7 @@ describe('screener criteria controls', () => {
     expect(screen.queryByText('$123.45')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
-    expect(screen.getByText('Page 2 of 3')).toBeInTheDocument()
+    expect(screen.getByText('Page 2 of 5')).toBeInTheDocument()
   })
 
   it('renders reported fundamentals and labels missing values without sentinel numbers', async () => {
