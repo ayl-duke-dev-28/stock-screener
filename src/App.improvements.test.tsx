@@ -78,4 +78,59 @@ describe('resilient screener workflow', () => {
 
     expect(screen.getByText(/6 of 6 selected factors reported/i)).toBeInTheDocument()
   })
+
+  it('separates opening a company from saving it and exposes control state', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: string) => Promise.resolve(
+      String(input).startsWith('/api/quotes')
+        ? new Response(JSON.stringify({ quotes: [] }))
+        : marketResponse(),
+    )))
+
+    render(<App />)
+    await screen.findByText('Test market')
+    const ticker = stocks[0].ticker
+    const save = screen.getByRole('button', { name: `Save ${ticker} to watchlist` })
+    fireEvent.click(save)
+
+    expect(screen.queryByRole('heading', { name: new RegExp(stocks[0].name) })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: `Remove ${ticker} from watchlist` })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Revenue growth' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Screener' })).toHaveAttribute('aria-current', 'page')
+
+    fireEvent.click(screen.getByRole('button', { name: `Open ${ticker} details` }))
+    expect(screen.getByRole('heading', { name: new RegExp(stocks[0].name) })).toBeInTheDocument()
+  })
+
+  it('supports visible sort direction and removable active criteria', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: string) => Promise.resolve(
+      String(input).startsWith('/api/quotes')
+        ? new Response(JSON.stringify({ quotes: [] }))
+        : marketResponse(),
+    )))
+
+    render(<App />)
+    await screen.findByText('Test market')
+    const direction = screen.getByRole('button', { name: 'Sort ascending' })
+    fireEvent.click(direction)
+    expect(screen.getByRole('button', { name: 'Sort descending' })).toBeInTheDocument()
+
+    fireEvent.change(screen.getByRole('slider', { name: 'Min. revenue growth' }), { target: { value: '20' } })
+    const remove = screen.getByRole('button', { name: 'Remove Min. revenue growth filter' })
+    fireEvent.click(remove)
+    expect(screen.queryByRole('button', { name: 'Remove Min. revenue growth filter' })).not.toBeInTheDocument()
+  })
+
+  it('offers export and omits unavailable insider ideas', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: string) => Promise.resolve(
+      String(input).startsWith('/api/quotes')
+        ? new Response(JSON.stringify({ quotes: [] }))
+        : marketResponse(),
+    )))
+
+    render(<App />)
+    await screen.findByText('Test market')
+    expect(screen.getByRole('button', { name: 'Export filtered results as CSV' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Ideas NEW' }))
+    expect(screen.queryByText('Insiders leaning in')).not.toBeInTheDocument()
+  })
 })
