@@ -318,7 +318,7 @@ export default function App() {
   useEffect(() => {
     const pending = quoteRequests.current!.claim(quoteTargets, (ticker) => Boolean(quotes[ticker]))
     if (!pending.length) return
-    fetch(`/api/quotes?tickers=${encodeURIComponent(pending.join(','))}`)
+    fetch(`/api/quotes?tickers=${encodeURIComponent(pending.join(','))}&range=1m&detail=summary`)
       .then(async (response) => {
         if (!response.ok) throw new Error('Quote API unavailable')
         return response.json() as Promise<{ quotes: Quote[] }>

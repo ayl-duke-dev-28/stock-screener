@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 const BASE_URL = 'https://data.businessquant.com'
+const providerTimeoutMs = 15_000
 
 export interface ProviderMetric {
   metric_full: string
@@ -173,7 +174,9 @@ export async function fetchStockQuotes(
   url.searchParams.set('period', config.period)
   url.searchParams.set('limit', String(config.limit))
   url.searchParams.set('api_key', apiKey)
-  const payload = await readJson<Record<string, ProviderQuoteSeries> | ProviderQuoteSeries>(await fetcher(url))
+  const payload = await readJson<Record<string, ProviderQuoteSeries> | ProviderQuoteSeries>(await fetcher(url, {
+    signal: AbortSignal.timeout(providerTimeoutMs),
+  }))
   const candidateSingle = payload as ProviderQuoteSeries
   const singleTickerPayload = Array.isArray(candidateSingle.data) ? candidateSingle : undefined
 
@@ -205,7 +208,9 @@ export async function fetchUsMarket(apiKey: string, fetcher: Fetcher = fetch, pa
   const metadataUrl = new URL('/metadata', BASE_URL)
   metadataUrl.searchParams.set('table', 'screener')
   metadataUrl.searchParams.set('api_key', apiKey)
-  const metadata = await readJson<ProviderMetric[]>(await fetcher(metadataUrl))
+  const metadata = await readJson<ProviderMetric[]>(await fetcher(metadataUrl, {
+    signal: AbortSignal.timeout(providerTimeoutMs),
+  }))
   const metrics = resolveMetrics(metadata)
   const preferredColumns = Array.from(new Set(Object.values(metrics).flatMap((metric) => metric ? [metric.requestKey] : [])))
 
@@ -217,6 +222,7 @@ export async function fetchUsMarket(apiKey: string, fetcher: Fetcher = fetch, pa
     return readJson<{ metadata: { total_records: number; total_pages: number }; data: ProviderRecord[] }>(await fetcher(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(providerTimeoutMs),
       body: JSON.stringify({
         conditions: '"Market Capitalization" > 0',
         preferred_columns: preferredColumns,
