@@ -45,11 +45,9 @@ export function scoreStock(stock: Stock, priorities: MetricKey[] = []): ScoreRes
   }
 }
 
-export function scoreToLabel(score: number): string {
-  if (score >= 90) return 'Exceptional'
-  if (score >= 75) return 'Strong'
-  if (score >= 55) return 'Balanced'
-  return 'Watchlist'
+export function scoreToLabel(score: number, coverage = 1): string {
+  const label = score >= 90 ? 'Exceptional' : score >= 75 ? 'Strong' : score >= 55 ? 'Balanced' : 'Watchlist'
+  return coverage < 1 ? `${label} · partial data` : label
 }
 
 const fitsMarketCap = (value: number | null, filter: Filters['marketCap']) => {
